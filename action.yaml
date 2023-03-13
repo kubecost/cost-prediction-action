@@ -1,0 +1,28 @@
+name: "Kubecost cost prediction"
+author: "Michael Dresser (Kubecost)"
+description: "Predict the cost impact of code changes to K8s object specs using Kubecost"
+inputs:
+  path:
+    decription: 'The specific path of a workload or directory of workloads to predict'
+    required: true
+  # TODO: Make a "setup Kubecost" Action for this?
+  # kubecost_api_path:
+  #   description: 'URL of the Kubecost API'
+  log_level:
+    description: "The log level of the action code"
+    required: false
+    default: "info"
+
+# TODO: Make a composite action on top of this? Have this action write output to
+# env than use out-of-the-box actions to write a comment from the output, then
+# we don't have to deal with GH API just actions
+runs:
+  using: 'docker'
+  image: "docker://gcr.kubecost.io/IMAGETODO:TAGTODO"
+  env:
+    PREDICTION_PATH: ${{ inputs.path }}
+    LOG_LEVEL: ${{ inputs.log_level }}
+    # KUBECOST_API_PATH: ${{ inputs.kubecost_api_path }}
+branding:
+  color: green
+  icon: dollar-sign
