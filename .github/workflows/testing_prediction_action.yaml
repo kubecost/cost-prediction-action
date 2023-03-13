@@ -14,14 +14,13 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          # this checks out just this subdir
-          path: ./costpredictionaction
+          path: ./
 
       - name: local action with raw yaml
-        uses: ./costpredictionaction/action
+        uses: ./
         with:
           path:
-            ./costpredictionaction/test
+            ./test
 
       # TODO: This is a fairly optimal example for how to use prediction with
       # a Helm chart, but unfortunately I'm working with act right now and
@@ -46,7 +45,7 @@ jobs:
       #     helm template kubecost-test . > ./templated.yaml
 
       # - name: local action with templated yaml
-      #   uses: ./costpredictionaction/action
+      #   uses: ./
       #   with:
       #     path:
       #       ./helmchart/templated.yaml
@@ -64,7 +63,7 @@ jobs:
         #   args: https://raw.githubusercontent.com/kubecost/cost-analyzer-helm-chart/develop/kubecost.yaml --output
 
       - name: local action with kubecost yaml
-        uses: ./costpredictionaction/action
+        uses: ./
         with:
           path:
             ./kubecost.yaml
