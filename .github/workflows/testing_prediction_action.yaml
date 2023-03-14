@@ -1,11 +1,6 @@
 name: TEST Predict Action
 
-on:
-  # pull_request:
-  #   branches:
-  #     - develop
-  #     - v*.*
-  workflow_dispatch:
+on: [workflow_dispatch]
 
 jobs:
   predict-cost:
@@ -17,10 +12,15 @@ jobs:
           path: ./
 
       - name: local action with raw yaml
+        id: raw-prediction
         uses: ./
         with:
           path:
             ./test
+
+      - name: output raw yaml prediction
+        run: |
+          echo "${{ steps.raw-prediction.outputs.PREDICTION_TABLE }}"
 
       # TODO: This is a fairly optimal example for how to use prediction with
       # a Helm chart, but unfortunately I'm working with act right now and
@@ -63,7 +63,12 @@ jobs:
         #   args: https://raw.githubusercontent.com/kubecost/cost-analyzer-helm-chart/develop/kubecost.yaml --output
 
       - name: local action with kubecost yaml
+        id: kubecost-raw-prediction
         uses: ./
         with:
           path:
             ./kubecost.yaml
+
+      - name: output kubecost yaml prediction
+        run: |
+          echo "${{ steps.kubecost-raw-prediction.outputs.PREDICTION_TABLE }}"

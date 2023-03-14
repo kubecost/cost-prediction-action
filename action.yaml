@@ -12,13 +12,17 @@ inputs:
     description: "The log level of the action code"
     required: false
     default: "info"
+  outputs:
+    PREDICTION_TABLE:
+      description: 'The ASCII table-formatted prediction'
+
 
 # TODO: Make a composite action on top of this? Have this action write output to
 # env than use out-of-the-box actions to write a comment from the output, then
 # we don't have to deal with GH API just actions
 runs:
   using: 'docker'
-  image: "docker://gcr.kubecost.io/IMAGETODO:TAGTODO"
+  image: "docker://kcpredict:1678820710"
   env:
     PREDICTION_PATH: ${{ inputs.path }}
     LOG_LEVEL: ${{ inputs.log_level }}
