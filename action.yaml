@@ -5,9 +5,9 @@ inputs:
   path:
     decription: 'The specific path of a workload or directory of workloads to predict'
     required: true
-  # TODO: Make a "setup Kubecost" Action for this?
-  # kubecost_api_path:
-  #   description: 'URL of the Kubecost API'
+  kubecost_api_path:
+    description: 'URL of the Kubecost API. Example: https://kubecost.example.com:9090/'
+    required: false
   log_level:
     description: "The log level of the action code"
     required: false
@@ -26,7 +26,7 @@ runs:
   env:
     PREDICTION_PATH: ${{ inputs.path }}
     LOG_LEVEL: ${{ inputs.log_level }}
-    # KUBECOST_API_PATH: ${{ inputs.kubecost_api_path }}
+    KUBECOST_API_PATH: ${{ inputs.kubecost_api_path }}
 branding:
   color: green
   icon: dollar-sign

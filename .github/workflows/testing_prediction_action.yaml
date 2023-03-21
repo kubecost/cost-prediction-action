@@ -16,8 +16,7 @@ jobs:
         uses: ./
         with:
           log_level: "warn"
-          path:
-            ./test
+          path: ./test
 
       - name: output raw yaml prediction
         run: |
@@ -67,9 +66,8 @@ jobs:
         id: kubecost-raw-prediction
         uses: ./
         with:
-          log_level: "warn"
-          path:
-            ./kubecost.yaml
+          log_level: "debug"
+          path: ./kubecost.yaml
 
       - name: output kubecost yaml prediction
         run: |

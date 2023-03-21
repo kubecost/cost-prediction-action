@@ -1,0 +1,36 @@
+name: TEST Predict with API
+
+on: [workflow_dispatch]
+
+jobs:
+  predict-cost-api:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          path: ./
+
+      # Sometimes kubectl takes a second to forward.
+      # Sleeping is bad but I'm not sure how else to do this,
+      # maybe repeatedly curl (up to max N times) until 200
+      # https://dev.to/richicoder1/how-we-connect-to-kubernetes-pods-from-github-actions-1mg
+      # - name: Forward the kubecost service
+      #   run: |
+      #     kubectl port-forward --namespace kubecost service/kubecost-cost-analyzer 9090 &
+      #     sleep 5
+
+      # - name: Curl the kubecost service
+      #   run: curl http://localhost:9090
+
+      - name: local action with raw yaml
+        id: raw-prediction
+        uses: ./
+        with:
+          log_level: "debug"
+          kubecost_api_path: "http://kubecost.example.com/model"
+          path: ./test
+
+      - name: output raw yaml prediction
+        run: |
+          echo "${{ steps.raw-prediction.outputs.PREDICTION_TABLE }}"
