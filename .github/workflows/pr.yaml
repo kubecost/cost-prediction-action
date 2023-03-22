@@ -1,0 +1,31 @@
+name: TEST PR workflow
+on:
+  pull_request:
+
+jobs:
+  predict-pr-noapi:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          path: ./
+
+      - name: Run predict on test files
+        id: prediction
+        uses: ./
+        with:
+          log_level: "debug"
+          path: ./test
+
+      - name: Output prediction
+        run: |
+          echo "${{ steps.prediction.outputs.PREDICTION_TABLE }}"
+
+      - name: Write comment on PR
+        uses: peter-evans/create-or-update-comment@v2
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            Kubecost's Cost Prediction:
+            ${{ steps.prediction.outputs.PREDICTION_TABLE }}
