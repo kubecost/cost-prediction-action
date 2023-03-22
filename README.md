@@ -3,7 +3,7 @@
 Predict the cost of Kubernetes resource specs in CI! Make cost decisions before
 merging changes.
 
-This is a GitHub Action, powered by Kubecost, to make cost predictions for K8s
+This is a GitHub Action, powered by [Kubecost](https://docs.kubecost.com/install-and-configure/install), to make cost predictions for K8s
 workloads before they are applied to your cluster. It _does not_ require you to
 have Kubecost installed, but will have highly-accurate cost and usage
 information for your environment if you do.
