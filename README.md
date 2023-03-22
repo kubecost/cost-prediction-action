@@ -10,7 +10,11 @@ information for your environment if you do.
 
 ## Usage
 
-Here is an example Action workflow using Kubecost's Predict Action:
+Below is an example Action workflow written with this Action. And here's a
+screenshot of what it would look like on your PR:
+
+![](./media/actioncomment.png)
+
 ``` yaml
 name: Predict K8s spec cost
 on: [pull_request]
@@ -96,9 +100,7 @@ The Action currently only supports predicting `.yml`/`.yaml` specs. If you have
 specs in other formats, you will have to put them into YAML before running
 prediction logic. E.g. for Helm, use `helm template`.
 
-The Action does not yet support prediction on only changed files. This is tricky
-anyway if you use tools like Helm, because how can you know what exactly changed
-between templates and values files?
+The Action does not yet support prediction on only changed files.
 
 ## Development
 
