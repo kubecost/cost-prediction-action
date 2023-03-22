@@ -29,9 +29,24 @@ jobs:
           path: ./repo
           
       # If using the API support, you need to make sure the Action runner has
-      # network access to your instance of Kubecost. This is infra dependent,
-      # but this workflow includes an example that assumes the runner has
-      # kubectl set up with access to your cluster.
+      # network access to your instance of Kubecost. This is infra dependent;
+      # the following example works with GKE (make sure to set up the necessary
+      # secrets).
+      # https://docs.github.com/en/actions/guides/deploying-to-google-kubernetes-engine
+      # - name: Setup gcloud
+      #   uses: google-github-actions/setup-gcloud@v0.2.0
+      #   with:
+      #     service_account_key: ${{ secrets.GCP_SA_KEY_B64 }}
+      #     project_id: ${{ secrets.GKE_PROJECT_ID }}
+      # 
+      # Get GKE credentials so kubectl has access to the cluster
+      # - name: Get GKE credentials
+      #   uses: google-github-actions/get-gke-credentials@v0.2.1
+      #   with:
+      #     cluster_name: ${{ secrets.GKE_CLUSTER }}
+      #     location: ${{ secrets.GKE_ZONE }}
+      #     credentials: ${{ secrets.GCP_SA_KEY_B64 }}
+      #     project_id: ${{ secrets.GKE_PROJECT_ID }}
       # 
       # - name: Forward the kubecost service
       #   run: |
