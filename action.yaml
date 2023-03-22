@@ -22,7 +22,7 @@ inputs:
 # we don't have to deal with GH API just actions
 runs:
   using: 'docker'
-  image: "docker://kcpredict:1678820710"
+  image: "docker://michaelkubecost/predictaction:0.0.1"
   env:
     PREDICTION_PATH: ${{ inputs.path }}
     LOG_LEVEL: ${{ inputs.log_level }}
