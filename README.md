@@ -10,15 +10,17 @@ information for your environment if you do.
 
 ## Usage
 
-Here is an example Action workflow using Kubecost's Predict Action:
+Below is an example Action workflow written with this Action. And here's a
+screenshot of what it would look like on your PR:
+
+![](./media/actioncomment.png)
+
 ``` yaml
 name: Predict K8s spec cost
-# This is a manually-triggered workflow. Check out GitHub's documentation for
-# "on" to set up this workflow to run on e.g. every PR.
-on: [workflow_dispatch]
+on: [pull_request]
 
 jobs:
-  predict-cost-api:
+  predict-cost:
     runs-on: ubuntu-latest
     steps:
       # Check out the current repo to ./repo
@@ -47,8 +49,8 @@ jobs:
       #   run: |
       #     helm template RELEASENAME ./repo >> ./templated.yaml
 
-      - name: local action with raw yaml
-        id: raw-prediction
+      - name: Run prediction
+        id: prediction
         uses: kubecost/cost-prediction-action@v0
         with:
           log_level: "info"
@@ -69,12 +71,27 @@ jobs:
           #
           # kubecost_api_path: "http://localhost:9090/model"
 
-      # This example just outputs the result in the Action run. You can also
-      # add it as a comment using Actions like:
-      # peter-evans/create-or-update-comment
-      - name: output raw yaml prediction
-        run: |
-          echo "${{ steps.raw-prediction.outputs.PREDICTION_TABLE }}"
+      # Write/update a comment with the prediction results.
+      - name: Update PR with prediction results
+        uses: edumserrano/find-create-or-update-comment@v1
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body-includes: '<!-- kubecost-prediction-results -->'
+          comment-author: 'github-actions[bot]'
+          edit-mode: replace
+          body: |
+            <!-- kubecost-prediction-results -->
+            
+            ## Kubecost's cost prediction
+
+            \```
+            ${{ steps.prediction.outputs.PREDICTION_TABLE }}
+            \```
+
+      # Alternatively, you can just output the prediction in the Action log.
+      # - name: output raw yaml prediction
+      #   run: |
+      #     echo "${{ steps.prediction.outputs.PREDICTION_TABLE }}"
 ```
 
 ## Limitations
@@ -83,9 +100,7 @@ The Action currently only supports predicting `.yml`/`.yaml` specs. If you have
 specs in other formats, you will have to put them into YAML before running
 prediction logic. E.g. for Helm, use `helm template`.
 
-The Action does not yet support prediction on only changed files. This is tricky
-anyway if you use tools like Helm, because how can you know what exactly changed
-between templates and values files?
+The Action does not yet support prediction on only changed files.
 
 ## Development
 
