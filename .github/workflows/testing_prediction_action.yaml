@@ -22,45 +22,12 @@ jobs:
         run: |
           echo "${{ steps.raw-prediction.outputs.PREDICTION_TABLE }}"
 
-      # TODO: This is a fairly optimal example for how to use prediction with
-      # a Helm chart, but unfortunately I'm working with act right now and
-      # don't want to bother setting up a token which is required for cloning
-      # public repos.
-      # See: https://github.com/nektos/act/issues/678#issuecomment-1321220127
-      # - name: checkout Helm chart
-      #   uses: actions/checkout@v2
-      #   with:
-      #     repository: 'kubecost/cost-analyzer-helm-chart'
-      #     ref: 'develop'
-      #     path: ./helmchart
-
-      # - name: Set up Helm
-      #   uses: azure/setup-helm@v1
-      #   with:
-      #     version: v3.8.2
-
-      # - name: template helm into yaml
-      #   working-directory: ./helmchart
-      #   run: |
-      #     helm template kubecost-test . > ./templated.yaml
-
-      # - name: local action with templated yaml
-      #   uses: ./
-      #   with:
-      #     path:
-      #       ./helmchart/templated.yaml
-
-      # So instead, I'll just curl Kubecost's pre-templated yaml
-      #
       - name: download templated kubecost yaml
         run: |
           curl \
               https://raw.githubusercontent.com/kubecost/cost-analyzer-helm-chart/develop/kubecost.yaml \
               --silent \
               --output ./kubecost.yaml
-        # uses: wei/curl@master
-        # with:
-        #   args: https://raw.githubusercontent.com/kubecost/cost-analyzer-helm-chart/develop/kubecost.yaml --output
 
       - name: local action with kubecost yaml
         id: kubecost-raw-prediction
