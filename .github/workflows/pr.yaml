@@ -22,12 +22,18 @@ jobs:
         run: |
           echo "${{ steps.prediction.outputs.PREDICTION_TABLE }}"
 
-      - name: Write comment on PR
-        uses: peter-evans/create-or-update-comment@v2
+      - name: Update PR with prediction results
+        uses: edumserrano/find-create-or-update-comment@v1
         with:
           issue-number: ${{ github.event.pull_request.number }}
+          body-includes: '<!-- kubecost-prediction-results -->'
+          comment-author: 'github-actions[bot]'
+          edit-mode: replace
           body: |
-            Kubecost's Cost Prediction:
+            <!-- kubecost-prediction-results -->
+
+            ## Kubecost's cost prediction
+
             ```
             ${{ steps.prediction.outputs.PREDICTION_TABLE }}
             ```
