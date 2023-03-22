@@ -28,7 +28,7 @@ jobs:
         uses: ./
         with:
           log_level: "debug"
-          kubecost_api_path: "http://kubecost.example.com/model"
+          kubecost_api_path: "http://nightly.kubecost.io:9090/model"
           path: ./test
 
       - name: output raw yaml prediction
