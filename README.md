@@ -1,5 +1,12 @@
-# cost-prediction-action
-GitHub Action to predict the cost of K8s spec changes
+# Kubernetes Cost Prediction Action
+
+Predict the cost of Kubernetes resource specs in CI! Make cost decisions before
+merging changes.
+
+This is a GitHub Action, powered by Kubecost, to make cost predictions for K8s
+workloads before they are applied to your cluster. It _does not_ require you to
+have Kubecost installed, but will have highly-accurate cost and usage
+information for your environment if you do.
 
 ## Usage
 
