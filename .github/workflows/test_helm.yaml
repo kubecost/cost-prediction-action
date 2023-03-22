@@ -1,0 +1,40 @@
+name: TEST Predict the KC Helm chart
+on: [workflow_dispatch]
+
+jobs:
+  predict-cost-helm:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout latest Action version
+        uses: actions/checkout@v2
+        with:
+          path: ./action
+
+      # - name: Checkout Helm chart
+      #   uses: actions/checkout@v2
+      #   with:
+      #     repository: 'kubecost/cost-analyzer-helm-chart'
+      #     ref: 'develop'
+      #     path: ./helmchart
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v1
+        with:
+          version: v3.8.2
+
+      - name: Template chart
+        run: |
+          helm repo add kubecost https://kubecost.github.io/cost-analyzer
+          helm template kubecost kubecost/cost-analyzer -n kubecost > ./templated.yaml
+
+      - name: Predict cost of templated chart
+        id: prediction
+        uses: ./action
+        with:
+          path:
+            ./templated.yaml
+
+      - name: Output prediction
+        run: |
+          echo "${{ steps.prediction.outputs.PREDICTION_TABLE }}"
