@@ -8,6 +8,10 @@ workloads before they are applied to your cluster. It _does not_ require you to
 have Kubecost installed, but will have highly-accurate cost and usage
 information for your environment if you do.
 
+In action:
+
+![](./media/actioncomment.png)
+
 ## Usage
 
 Add this Action as a step in one of your Actions workflows and point it at some
@@ -16,11 +20,7 @@ YAML files. It's that simple!
 ### Simple
 
 Below is an excerpt from a workflow written with this Action. This is the
-easiest way to add Kubernetes cost prediction to your CI workflow.
-
-In action:
-
-![](./media/actioncomment.png)
+easiest way to add Kubernetes cost prediction to your CI.
 
 ``` yaml
 - name: Run prediction
