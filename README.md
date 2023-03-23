@@ -10,10 +10,50 @@ information for your environment if you do.
 
 ## Usage
 
-Below is an example Action workflow written with this Action. And here's a
-screenshot of what it would look like on your PR:
+Add this Action as a step in one of your Actions workflows and point it at some
+YAML files. It's that simple!
+
+### Simple
+
+Below is an excerpt from a workflow written with this Action. This is the
+easiest way to add Kubernetes cost prediction to your CI workflow.
+
+In action:
 
 ![](./media/actioncomment.png)
+
+``` yaml
+- name: Run prediction
+  id: prediction
+  uses: kubecost/cost-prediction-action@v0
+  with:
+    # Set this to the path containing your YAML specs. It can be a single
+    # YAML file or a directory. The Action will recursively search if this
+    # is a directory and process all .yaml/.yml files it finds.
+    path: ./repo
+
+# Write/update a comment with the prediction results.
+- name: Update PR with prediction results
+  uses: edumserrano/find-create-or-update-comment@v1
+  with:
+    issue-number: ${{ github.event.pull_request.number }}
+    body-includes: '<!-- kubecost-prediction-results -->'
+    comment-author: 'github-actions[bot]'
+    edit-mode: replace
+    body: |
+      <!-- kubecost-prediction-results -->
+      
+      ## Kubecost's total cost prediction
+
+      \```
+      ${{ steps.prediction.outputs.PREDICTION_TABLE }}
+      \```
+```
+
+### Advanced (full workflow)
+
+This is a full Actions workflow file, with commented-out sections and
+explanations highlighting advanced features and some complex use-cases.
 
 ``` yaml
 name: Predict K8s spec cost
@@ -113,7 +153,8 @@ jobs:
 
 The Action currently only supports predicting `.yml`/`.yaml` specs. If you have
 specs in other formats, you will have to put them into YAML before running
-prediction logic. E.g. for Helm, use `helm template`.
+prediction logic. E.g. for Helm, use `helm template`. More support planned,
+please open an issue describing your use case if it is not yet supported.
 
 The Action does not yet support prediction on only changed files.
 
