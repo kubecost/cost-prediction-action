@@ -172,7 +172,13 @@ specs in other formats, you will have to put them into YAML before running
 prediction logic. E.g. for Helm, use `helm template`. More support planned,
 please open an issue describing your use case if it is not yet supported.
 
+The Action supports a limited set of Kubernetes object types. We are working
+to expand the set of supported types.
+
 The Action does not yet support prediction on only changed files.
+
+The Action does not provide predictions for objects/specs without container
+resource requests.
 
 ## Development
 
