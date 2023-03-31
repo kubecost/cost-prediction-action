@@ -163,7 +163,7 @@ jobs:
 
 | Name | Description |
 |------|-------------|
-| `PREDICITION_TABLE` | An ASCII-formatted table of the cost prediction. Best rendered in monospace. |
+| `PREDICTION_TABLE` | An ASCII-formatted table of the cost prediction. Best rendered in monospace. |
 
 ## Limitations
 
