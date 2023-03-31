@@ -1,6 +1,6 @@
 # Kubernetes Cost Prediction Action
 
-Predict the cost of Kubernetes resource specs in CI! Make cost decisions before
+Predict the cost of Kubernetes resource specs (manifests) in CI! Make cost decisions before
 merging changes.
 
 This is a GitHub Action, powered by [Kubecost](https://docs.kubecost.com/install-and-configure/install), to make cost predictions for K8s
@@ -15,7 +15,7 @@ In action:
 ## Usage
 
 Add this Action as a step in one of your Actions workflows and point it at some
-YAML files. It's that simple!
+YAML files.
 
 ### Simple
 
@@ -43,7 +43,7 @@ easiest way to add Kubernetes cost prediction to your CI.
     body: |
       <!-- kubecost-prediction-results -->
       
-      ## Kubecost's total cost prediction
+      ## Kubecost's total cost prediction for K8s YAML Manifests in this PR
 
       \```
       ${{ steps.prediction.outputs.PREDICTION_TABLE }}
@@ -137,7 +137,7 @@ jobs:
           body: |
             <!-- kubecost-prediction-results -->
             
-            ## Kubecost's cost prediction
+            ## Kubecost's total cost prediction for K8s YAML Manifests in this PR
 
             \```
             ${{ steps.prediction.outputs.PREDICTION_TABLE }}
@@ -148,6 +148,22 @@ jobs:
       #   run: |
       #     echo "${{ steps.prediction.outputs.PREDICTION_TABLE }}"
 ```
+
+### Inputs/Outputs
+
+#### Action inputs
+
+| Name | Description | Required? | Default |
+|------|-------------|-----------|---------|
+| `path` | The path of a file or directory that contains K8s YAML manifests to predict the cost impact of | Yes | |
+| `kubecost_api_path` | URL of your Kubecost API. If provided, cost predictions will be a diff based on cost data tracked by your Kubecost instance. If not provied, cost predictions will be a total cost based on Kubecost's default pricing. | No | |
+| `log_level` | The log level to run the Action with. Set to `debug` for more granularity or `warn` or `error` for less granularity. | No | `info` |
+
+#### Action outputs
+
+| Name | Description |
+|------|-------------|
+| `PREDICITION_TABLE` | An ASCII-formatted table of the cost prediction. Best rendered in monospace. |
 
 ## Limitations
 
