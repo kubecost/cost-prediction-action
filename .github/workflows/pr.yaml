@@ -32,7 +32,7 @@ jobs:
           body: |
             <!-- kubecost-prediction-results -->
 
-            ## Kubecost's cost prediction
+            ## Kubecost's total cost prediction for K8s manifests in `./test`
 
             ```
             ${{ steps.prediction.outputs.PREDICTION_TABLE }}
