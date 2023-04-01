@@ -1,9 +1,9 @@
 # Kubernetes Cost Prediction Action
 
-Predict the cost of Kubernetes resource specs (manifests) in CI! Make cost decisions before
+Predict the cost of Kubernetes manifests (specs) in CI! Make cost decisions before
 merging changes.
 
-This is a GitHub Action, powered by [Kubecost](https://docs.kubecost.com/install-and-configure/install), to make cost predictions for K8s
+This is a [GitHub Action](https://docs.github.com/en/actions), powered by [Kubecost](https://docs.kubecost.com/install-and-configure/install), to make cost predictions for K8s
 workloads before they are applied to your cluster. It _does not_ require you to
 have Kubecost installed, but will have highly-accurate cost and usage
 information for your environment if you do.
@@ -14,13 +14,20 @@ In action:
 
 ## Usage
 
-Add this Action as a step in one of your Actions workflows and point it at some
-YAML files.
+Add this Action as a step in one of your Actions workflows and point it at a single
+YAML file or a directory containing at least one YAML file. Non-YAML files will be
+ignored. The YAML files will be interpreted as Kubernetes manifests and a cost
+prediction will be run on supported types of [Kubernetes objects](https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/).
+
+> If you aren't familiar with GitHub Actions, check out GitHub's [quickstart](https://docs.github.com/en/actions/quickstart)
+> documentation.
 
 ### Simple
 
 Below is an excerpt from a workflow written with this Action. This is the
-easiest way to add Kubernetes cost prediction to your CI.
+easiest way to add Kubernetes cost prediction to your CI. If you want
+a premade workflow file to riff on, check out the "Advanced" example
+below.
 
 ``` yaml
 - name: Run prediction
