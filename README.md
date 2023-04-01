@@ -61,6 +61,8 @@ below.
 
 This is a full Actions workflow file, with commented-out sections and
 explanations highlighting advanced features and some complex use-cases.
+You can copy-paste this into a file in your `.github/workflows` folder
+and start tuning it to use as a live Action on your repo.
 
 ``` yaml
 name: Predict K8s spec cost
