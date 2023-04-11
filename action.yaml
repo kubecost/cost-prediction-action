@@ -1,4 +1,4 @@
-name: "Kubecost cost prediction"
+name: "Kubecost Cost Prediction"
 author: "Michael Dresser (Kubecost)"
 description: "Predict the cost impact of code changes to K8s object specs using Kubecost"
 inputs:
