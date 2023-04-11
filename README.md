@@ -32,7 +32,7 @@ below.
 ``` yaml
 - name: Run prediction
   id: prediction
-  uses: kubecost/cost-prediction-action@v0
+  uses: kubecost/cost-prediction-action@v0.1.1
   with:
     # Set this to the path containing your YAML specs. It can be a single
     # YAML file or a directory. The Action will recursively search if this
@@ -115,7 +115,7 @@ jobs:
 
       - name: Run prediction
         id: prediction
-        uses: kubecost/cost-prediction-action@v0
+        uses: kubecost/cost-prediction-action@v0.1.1
         with:
           log_level: "info"
           # Set this to the path containing your YAML specs. It can be a single
