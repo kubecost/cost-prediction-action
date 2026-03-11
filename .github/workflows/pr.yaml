@@ -11,6 +11,13 @@ jobs:
         with:
           path: ./
 
+      - name: Checkout kubecost/github-actions
+        uses: actions/checkout@v2
+        with:
+          repository: kubecost/github-actions
+          token: ${{ secrets.ACTIONS_PAT }}
+          path: ./github-actions
+
       - name: Run predict on test files
         id: prediction
         uses: ./
@@ -23,7 +30,7 @@ jobs:
           echo "${{ steps.prediction.outputs.PREDICTION_TABLE }}"
 
       - name: Find existing PR comment
-        uses: kubecost/github-actions/find-comment@main
+        uses: ./github-actions/find-comment
         id: find-comment
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -32,7 +39,7 @@ jobs:
           body-includes: '<!-- kubecost-prediction-results -->'
 
       - name: Create or update PR comment with prediction results
-        uses: kubecost/github-actions/create-or-update-comment@main
+        uses: ./github-actions/create-or-update-comment
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           issue-number: ${{ github.event.pull_request.number }}
