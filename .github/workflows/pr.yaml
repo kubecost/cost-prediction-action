@@ -15,7 +15,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           repository: kubecost/github-actions
-          token: ${{ secrets.ACTIONS_PAT }}
+          token: ${{ secrets.CPA_ACTIONS_PAT }}
           path: ./github-actions
 
       - name: Run predict on test files
