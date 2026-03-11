@@ -44,12 +44,14 @@ below.
   uses: kubecost/github-actions/find-comment@main
   id: find-comment
   with:
+    token: ${{ secrets.GITHUB_TOKEN }}
     issue-number: ${{ github.event.pull_request.number }}
     comment-author: 'github-actions[bot]'
     body-includes: '<!-- kubecost-prediction-results -->'
 - name: Create or update PR comment with prediction results
   uses: kubecost/github-actions/create-or-update-comment@main
   with:
+    token: ${{ secrets.GITHUB_TOKEN }}
     issue-number: ${{ github.event.pull_request.number }}
     comment-id: ${{ steps.find-comment.outputs.comment-id }}
     edit-mode: replace
@@ -146,12 +148,14 @@ jobs:
         uses: kubecost/github-actions/find-comment@main
         id: find-comment
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           issue-number: ${{ github.event.pull_request.number }}
           comment-author: 'github-actions[bot]'
           body-includes: '<!-- kubecost-prediction-results -->'
       - name: Create or update PR comment with prediction results
         uses: kubecost/github-actions/create-or-update-comment@main
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           issue-number: ${{ github.event.pull_request.number }}
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
           edit-mode: replace
