@@ -22,12 +22,19 @@ jobs:
         run: |
           echo "${{ steps.prediction.outputs.PREDICTION_TABLE }}"
 
-      - name: Update PR with prediction results
-        uses: edumserrano/find-create-or-update-comment@v1
+      - name: Find existing PR comment
+        uses: kubecost/github-actions/find-comment@main
+        id: find-comment
         with:
           issue-number: ${{ github.event.pull_request.number }}
-          body-includes: '<!-- kubecost-prediction-results -->'
           comment-author: 'github-actions[bot]'
+          body-includes: '<!-- kubecost-prediction-results -->'
+
+      - name: Create or update PR comment with prediction results
+        uses: kubecost/github-actions/create-or-update-comment@main
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
           edit-mode: replace
           body: |
             <!-- kubecost-prediction-results -->
