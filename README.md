@@ -81,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Check out the current repo to ./repo
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v5
         with:
           path: ./repo
           
