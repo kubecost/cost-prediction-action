@@ -1,9 +1,9 @@
 name: "Kubecost Cost Prediction"
-author: "Michael Dresser (Kubecost)"
+author: "Kubecost"
 description: "Predict the cost impact of code changes to K8s object specs using Kubecost"
 inputs:
   path:
-    decription: 'The specific path of a workload or directory of workloads to predict'
+    description: 'The specific path of a workload or directory of workloads to predict'
     required: true
   kubecost_api_path:
     description: 'URL of the Kubecost API. Example: https://kubecost.example.com:9090/model'
@@ -12,9 +12,9 @@ inputs:
     description: "The log level of the action code"
     required: false
     default: "info"
-  outputs:
-    PREDICTION_TABLE:
-      description: 'The ASCII table-formatted prediction'
+outputs:
+  PREDICTION_TABLE:
+    description: 'The ASCII table-formatted prediction'
 
 runs:
   using: 'docker'
