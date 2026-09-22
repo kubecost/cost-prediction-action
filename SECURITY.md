@@ -12,7 +12,3 @@ pull requests.
 
 Please include the affected version or commit, steps to reproduce, and the
 impact you expect.
-
-## Supported versions
-
-Only the latest release receives security fixes.

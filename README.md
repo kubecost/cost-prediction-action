@@ -79,9 +79,9 @@ below.
       --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- kubecost-prediction-results -->"))) | .id')"
     cid="${cid%%$'\n'*}"
     if [ -n "$cid" ]; then
-      gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$cid" -f body="$body"
+      gh api --silent -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$cid" -f body="$body"
     else
-      gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -f body="$body"
+      gh api --silent -X POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -f body="$body"
     fi
 ~~~
 
@@ -190,9 +190,9 @@ jobs:
             --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- kubecost-prediction-results -->"))) | .id')"
           cid="${cid%%$'\n'*}"
           if [ -n "$cid" ]; then
-            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$cid" -f body="$body"
+            gh api --silent -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$cid" -f body="$body"
           else
-            gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -f body="$body"
+            gh api --silent -X POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -f body="$body"
           fi
 
       # Alternatively, you can just print the prediction in the Action log.
