@@ -211,6 +211,7 @@ jobs:
 | `path` | The path of a file or directory that contains K8s YAML manifests to predict the cost impact of | Yes | |
 | `kubecost_api_path` | URL of your Kubecost API. If provided, cost predictions will be a diff based on cost data tracked by your Kubecost instance. If not provided, cost predictions will be a total cost based on Kubecost's default pricing. | No | |
 | `log_level` | The log level to run the Action with. Set to `debug` for more granularity or `warn` or `error` for less granularity. | No | `info` |
+| `comment` | Since v0.2.0. Set to `"true"` to add the prediction to the job summary and create, or update on later pushes, one prediction comment on the pull request. The job needs `pull-requests: write`. Pull requests from forks get a read-only token, so they get only the job summary. | No | `"false"` |
 
 #### Action outputs
 

@@ -12,17 +12,86 @@ inputs:
     description: "The log level of the action code"
     required: false
     default: "info"
+  comment:
+    description: >-
+      Set to "true" to add the prediction to the job summary and create or
+      update one comment on the pull request. The job needs
+      `pull-requests: write`. Pull requests from forks get only the job summary.
+    required: false
+    default: "false"
 outputs:
   PREDICTION_TABLE:
     description: 'The ASCII table-formatted prediction'
+    value: ${{ steps.predict.outputs.PREDICTION_TABLE }}
 
 runs:
-  using: 'docker'
-  image: "docker://gcr.io/kubecost1/cost-prediction-action:0.1.0"
-  env:
-    PREDICTION_PATH: ${{ inputs.path }}
-    LOG_LEVEL: ${{ inputs.log_level }}
-    KUBECOST_API_PATH: ${{ inputs.kubecost_api_path }}
+  using: composite
+  steps:
+    - id: predict
+      uses: docker://gcr.io/kubecost1/cost-prediction-action@sha256:14dade8604cf9a1beaacb0cfe2b156237da1a2cf499bb94a68ab16ec7d155d9d
+      env:
+        PREDICTION_PATH: ${{ inputs.path }}
+        LOG_LEVEL: ${{ inputs.log_level }}
+        KUBECOST_API_PATH: ${{ inputs.kubecost_api_path }}
+
+    # Values reach the script only through env and are always quoted. The table
+    # holds names from the manifests under review, so it is treated as untrusted
+    # text: it is never evaluated and is always inside a code block.
+    - name: Report prediction
+      if: inputs.comment == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PREDICTION_TABLE: ${{ steps.predict.outputs.PREDICTION_TABLE }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+      run: |
+        set -euo pipefail
+        marker='<!-- kubecost-prediction-results -->'
+
+        # A fence longer than any run of backticks in the table, so the table
+        # cannot close the code block and be rendered as markdown.
+        longest=$(printf '%s\n' "$PREDICTION_TABLE" |
+          awk '{ while (match($0, /`+/)) { if (RLENGTH > m) m = RLENGTH; $0 = substr($0, RSTART + RLENGTH) } } END { print m + 0 }')
+        fence=$(printf '%*s' "$(( longest < 3 ? 3 : longest + 1 ))" '' | tr ' ' '`')
+
+        printf '## Kubecost cost prediction\n\n%s\n%s\n%s\n' "$fence" "$PREDICTION_TABLE" "$fence" >> "$GITHUB_STEP_SUMMARY"
+
+        if [[ ! "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+          echo '::notice::Not a pull request event; the prediction is in the job summary only.'
+          exit 0
+        fi
+        if [[ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ]]; then
+          echo '::notice::Pull requests from forks get a read-only token; the prediction is in the job summary only.'
+          exit 0
+        fi
+        if ! command -v gh > /dev/null; then
+          echo '::error::comment needs the GitHub CLI (gh), which GitHub-hosted runners include.'
+          exit 1
+        fi
+        export GH_HOST="${GITHUB_SERVER_URL#https://}"
+
+        # GitHub comments are limited to 65,536 characters.
+        table=$PREDICTION_TABLE note=''
+        if (( ${#table} > 60000 )); then
+          table=${table:0:60000}
+          table=${table%$'\n'*}
+          note=$'\n\nThe table is too long for a comment. The full table is in the job summary.'
+        fi
+        body=$(printf '%s\n\n## Kubecost cost prediction\n\n%s\n%s\n%s%s' "$marker" "$fence" "$table" "$fence" "$note")
+
+        denied='::error::GitHub refused the comment request. The job needs "permissions: pull-requests: write".'
+        if ! ids=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- kubecost-prediction-results -->"))) | .id'); then
+          echo "$denied"
+          exit 1
+        fi
+        cid=${ids%%$'\n'*}
+        if [[ -n "$cid" ]]; then
+          gh api --silent -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$cid" -f body="$body" || { echo "$denied"; exit 1; }
+        else
+          gh api --silent -X POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -f body="$body" || { echo "$denied"; exit 1; }
+        fi
 branding:
   color: green
   icon: dollar-sign
