@@ -7,12 +7,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v6
         with:
           path: ./
 
       - name: Checkout kubecost/github-actions
-        uses: actions/checkout@v2
+        uses: actions/checkout@v6
         with:
           repository: kubecost/github-actions
           token: ${{ secrets.CPA_ACTIONS_PAT }}
