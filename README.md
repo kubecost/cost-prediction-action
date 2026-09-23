@@ -3,43 +3,41 @@
 Predict the cost of Kubernetes manifests (specs) in CI! Make cost decisions before
 merging changes.
 
-This is a [GitHub Action](https://docs.github.com/en/actions), powered by [Kubecost](https://docs.kubecost.com/install-and-configure/install), to make cost predictions for K8s
-workloads before they are applied to your cluster. It _does not_ require you to
-have Kubecost installed, but will have highly-accurate cost and usage
-information for your environment if you do.
+This is a [GitHub Action](https://docs.github.com/en/actions/quickstart), powered by [Kubecost](https://docs.kubecost.com/install-and-configure/install), to make cost predictions for K8s workloads before they are applied to your cluster. It _does not_ require you to have Kubecost installed, but will produce highly-accurate, environment-specific predictions if you do.
 
 In action:
 
 ![](./media/actioncomment.png)
 
-## Usage
+---
+
+## Actions in this Repository
+
+| Action | Description |
+|--------|-------------|
+| [`kubecost/cost-prediction-action`](https://github.com/kubecost/cost-prediction-action) | **Base action** — predicts cost of K8s manifests and outputs a formatted table |
+| [`./action-enhanced`](./action-enhanced/action.yaml) | **Enhanced action** — adds delta/diff mode, cost threshold enforcement, and budget checks on top of the base action |
+
+---
+
+## Base Action Usage
 
 Add this Action as a step in one of your Actions workflows and point it at a single
 YAML file or a directory containing at least one YAML file. Non-YAML files will be
 ignored. The YAML files will be interpreted as Kubernetes manifests and a cost
-prediction will be run on supported types of [Kubernetes objects](https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/).
+prediction will be run on supported [Kubernetes object types](https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/).
 
-> If you aren't familiar with GitHub Actions, check out GitHub's [quickstart](https://docs.github.com/en/actions/quickstart)
-> documentation.
+> If you aren't familiar with GitHub Actions, check out GitHub's [quickstart](https://docs.github.com/en/actions/quickstart) documentation.
 
 ### Simple
 
-Below is an excerpt from a workflow written with this Action. This is the
-easiest way to add Kubernetes cost prediction to your CI. If you want
-a premade workflow file to riff on, check out the "Advanced" example
-below.
-
-``` yaml
+```yaml
 - name: Run prediction
   id: prediction
   uses: kubecost/cost-prediction-action@v0.1.1
   with:
-    # Set this to the path containing your YAML specs. It can be a single
-    # YAML file or a directory. The Action will recursively search if this
-    # is a directory and process all .yaml/.yml files it finds.
     path: ./repo
 
-# Find existing PR comment, then create or update it with prediction results.
 - name: Find existing PR comment
   uses: kubecost/github-actions/find-comment@main
   id: find-comment
@@ -67,12 +65,7 @@ below.
 
 ### Advanced (full workflow)
 
-This is a full Actions workflow file, with commented-out sections and
-explanations highlighting advanced features and some complex use-cases.
-You can copy-paste this into a file in your `.github/workflows` folder
-and start tuning it to use as a live Action on your repo.
-
-``` yaml
+```yaml
 name: Predict K8s spec cost
 on: [pull_request]
 
@@ -80,70 +73,28 @@ jobs:
   predict-cost:
     runs-on: ubuntu-latest
     steps:
-      # Check out the current repo to ./repo
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           path: ./repo
-          
-      # If using the API support, you need to make sure the Action runner has
-      # network access to your instance of Kubecost. This is infra dependent;
-      # the following example works with GKE (make sure to set up the necessary
-      # secrets).
-      # https://docs.github.com/en/actions/guides/deploying-to-google-kubernetes-engine
-      # - name: Setup gcloud
-      #   uses: google-github-actions/setup-gcloud@v0.2.0
-      #   with:
-      #     service_account_key: ${{ secrets.GCP_SA_KEY_B64 }}
-      #     project_id: ${{ secrets.GKE_PROJECT_ID }}
-      # 
-      # Get GKE credentials so kubectl has access to the cluster
-      # - name: Get GKE credentials
-      #   uses: google-github-actions/get-gke-credentials@v0.2.1
-      #   with:
-      #     cluster_name: ${{ secrets.GKE_CLUSTER }}
-      #     location: ${{ secrets.GKE_ZONE }}
-      #     credentials: ${{ secrets.GCP_SA_KEY_B64 }}
-      #     project_id: ${{ secrets.GKE_PROJECT_ID }}
-      # 
+
+      # Uncomment for GKE / port-forwarded Kubecost access:
       # - name: Forward the kubecost service
       #   run: |
       #     kubectl port-forward --namespace kubecost service/kubecost-cost-analyzer 9090 &
       #     sleep 5
-      
-      # If you use Helm, you should template the chart and then run the Predict
-      # Action targeting the result. Here's an example of how to do that.
-      # 
-      # - name: Install helm
-      #   run: |
-      #     curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
-      # 
+
+      # For Helm-based repos, template first:
       # - name: Helm template
-      #   run: |
-      #     helm template RELEASENAME ./repo >> ./templated.yaml
+      #   run: helm template RELEASENAME ./repo >> ./templated.yaml
 
       - name: Run prediction
         id: prediction
         uses: kubecost/cost-prediction-action@v0.1.1
         with:
           log_level: "info"
-          # Set this to the path containing your YAML specs. It can be a single
-          # YAML file or a directory. The Action will recursively search if this
-          # is a directory and process all .yaml/.yml files it finds.
-          # 
-          # If you use Helm, you probably want to run "helm template", output
-          # to a path like ./templated.yaml, and set "path: ./templated.yaml".
           path: ./repo
-          # Set this to either:
-          # - localhost:9090/model if port forwarding OR
-          # - The URL of your Kubecost instance if the runner has direct network
-          #   access, e.g. "https://kubecost.example.com:9090/model"
-          #
-          # If unset, the Action will use Kubecost's default pricing to make a
-          # prediction and it will be unable to make
-          #
           # kubecost_api_path: "http://localhost:9090/model"
 
-      # Find existing PR comment, then create or update it with prediction results.
       - name: Find existing PR comment
         uses: kubecost/github-actions/find-comment@main
         id: find-comment
@@ -167,45 +118,143 @@ jobs:
             \```
             ${{ steps.prediction.outputs.PREDICTION_TABLE }}
             \```
-
-      # Alternatively, you can just output the prediction in the Action log.
-      # - name: output raw yaml prediction
-      #   run: |
-      #     echo "${{ steps.prediction.outputs.PREDICTION_TABLE }}"
 ```
 
-### Inputs/Outputs
+### Base Action Inputs/Outputs
 
-#### Action inputs
+#### Inputs
 
-| Name | Description | Required? | Default |
-|------|-------------|-----------|---------|
-| `path` | The path of a file or directory that contains K8s YAML manifests to predict the cost impact of | Yes | |
-| `kubecost_api_path` | URL of your Kubecost API. If provided, cost predictions will be a diff based on cost data tracked by your Kubecost instance. If not provied, cost predictions will be a total cost based on Kubecost's default pricing. | No | |
-| `log_level` | The log level to run the Action with. Set to `debug` for more granularity or `warn` or `error` for less granularity. | No | `info` |
+| Name | Description | Required | Default |
+|------|-------------|----------|---------|
+| `path` | Path to a file or directory of K8s YAML manifests | Yes | |
+| `kubecost_api_path` | URL of your Kubecost API (e.g. `https://kubecost.example.com:9090/model`). If omitted, default pricing is used. | No | |
+| `log_level` | Log verbosity: `debug`, `info`, `warn`, `error` | No | `info` |
 
-#### Action outputs
+#### Outputs
 
 | Name | Description |
 |------|-------------|
-| `PREDICTION_TABLE` | An ASCII-formatted table of the cost prediction. Best rendered in monospace. |
+| `PREDICTION_TABLE` | ASCII-formatted cost prediction table |
+
+---
+
+## Enhanced Action Usage
+
+The enhanced action (`./action-enhanced`) wraps the base action and adds:
+
+1. **Delta/Diff Mode** — compares cost between your PR branch and a base branch
+2. **Cost Threshold Enforcement** — fails the workflow if cost increases exceed configured limits
+3. **Budget Checks** — validates predicted cost against a Kubecost budget
+
+### Example: Full Governance Workflow
+
+```yaml
+name: Cost Governance
+on: [pull_request]
+
+jobs:
+  cost-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required for delta mode
+
+      - name: Check cost impact
+        id: cost
+        uses: kubecost/cost-prediction-action/action-enhanced@main
+        with:
+          path: ./k8s
+          kubecost_api_path: ${{ secrets.KUBECOST_API_PATH }}
+          enable_delta_mode: "true"
+          base_ref: "main"
+          max_cost_increase: "100.00"
+          max_cost_percentage: "15"
+          fail_on_threshold: "true"
+          budget_check_enabled: "true"
+          budget_id: "team-alpha-budget"
+          fail_on_budget_exceeded: "true"
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 💰 Cost Impact Analysis
+              | | |
+              |---|---|
+              | **Current Cost** | \`$${{ steps.cost.outputs.TOTAL_MONTHLY_COST }}/mo\` |
+              | **Base Cost** | \`$${{ steps.cost.outputs.BASE_COST }}/mo\` |
+              | **Change** | \`${{ steps.cost.outputs.COST_CHANGE }}\` (\`${{ steps.cost.outputs.COST_CHANGE_PERCENTAGE }}%\`) |
+              | **Budget Status** | \`${{ steps.cost.outputs.BUDGET_STATUS }}\` |
+              | **Budget Remaining** | \`$${{ steps.cost.outputs.BUDGET_REMAINING }}\` |`
+            });
+```
+
+### Enhanced Action Inputs
+
+#### Base Inputs (inherited)
+
+| Input | Description | Default |
+|-------|-------------|---------|
+| `path` | Path to workload file or directory | (required) |
+| `kubecost_api_path` | URL of Kubecost API | |
+| `log_level` | Log level | `info` |
+
+#### Delta Mode
+
+| Input | Description | Default |
+|-------|-------------|---------|
+| `enable_delta_mode` | Compare costs between current and base branch | `false` |
+| `base_ref` | Base branch to compare against | `main` |
+
+#### Cost Thresholds
+
+| Input | Description | Default |
+|-------|-------------|---------|
+| `max_cost_increase` | Max allowed cost increase in dollars | (none) |
+| `max_cost_percentage` | Max allowed cost increase percentage | (none) |
+| `fail_on_threshold` | Fail workflow when threshold exceeded | `true` |
+
+#### Budget Checks
+
+| Input | Description | Default |
+|-------|-------------|---------|
+| `budget_check_enabled` | Enable budget validation | `false` |
+| `budget_id` | Kubecost budget ID to check against | (none) |
+| `fail_on_budget_exceeded` | Fail workflow when budget would be exceeded | `true` |
+
+### Enhanced Action Outputs
+
+| Output | Description |
+|--------|-------------|
+| `PREDICTION_TABLE` | ASCII cost prediction table |
+| `PREDICTION_JSON` | JSON-formatted prediction data |
+| `TOTAL_MONTHLY_COST` | Total monthly cost |
+| `BASE_COST` | Base branch cost *(delta mode only)* |
+| `COST_CHANGE` | Absolute cost difference *(delta mode only)* |
+| `COST_CHANGE_PERCENTAGE` | Percentage cost change *(delta mode only)* |
+| `THRESHOLD_EXCEEDED` | Whether thresholds were exceeded (`true`/`false`) |
+| `BUDGET_STATUS` | `WITHIN_BUDGET`, `EXCEEDS_BUDGET`, or `NOT_CHECKED` |
+| `BUDGET_TOTAL` | Budget spend limit in dollars |
+| `BUDGET_CURRENT_SPEND` | Current spend against the budget |
+| `BUDGET_REMAINING` | Remaining budget before this deployment |
+| `BUDGET_UTILIZATION_PERCENTAGE` | Current utilization % before this deployment |
+
+---
 
 ## Limitations
 
-The Action currently only supports predicting `.yml`/`.yaml` specs. If you have
-specs in other formats, you will have to put them into YAML before running
-prediction logic. E.g. for Helm, use `helm template`. More support planned,
-please open an issue describing your use case if it is not yet supported.
+- Only `.yml`/`.yaml` manifest files are supported. For Helm, run `helm template` first.
+- A limited set of Kubernetes object types are supported. More are planned.
+- Manifests without container resource requests will not produce predictions.
+- Delta mode requires `fetch-depth: 0` in the checkout step so that the base branch is accessible.
 
-The Action supports a limited set of Kubernetes object types. We are working
-to expand the set of supported types.
-
-The Action does not yet support prediction on only changed files.
-
-The Action does not provide predictions for objects/specs without container
-resource requests.
+---
 
 ## Development
 
-Source code for the container is mostly closed. Kubecost engineers, visit
-`cmd/costpredictionaction` in KCM for more information about development, testing, and releasing.
+Source code for the prediction container is in the upstream Kubecost repo. Kubecost engineers: see `cmd/costpredictionaction` in KCM for development, testing, and releasing details.

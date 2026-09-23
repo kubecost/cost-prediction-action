@@ -1,6 +1,6 @@
 name: "Kubecost Cost Prediction Enhanced"
 author: "Michael Sturdivant (Kubecost)"
-description: "Predict the cost impact of code changes to K8s object specs using Kubecost with delta/diff mode and cost thresholds"
+description: "Predict the cost impact of code changes to K8s object specs using Kubecost with delta/diff mode, cost thresholds, and budget checks"
 
 inputs:
   path:
@@ -38,6 +38,20 @@ inputs:
     required: false
     default: 'true'
 
+  # Budget Check inputs
+  budget_check_enabled:
+    description: 'Enable budget validation against a Kubecost budget. Requires kubecost_api_path.'
+    required: false
+    default: 'false'
+  budget_id:
+    description: 'The ID of the Kubecost budget to check against (from the Kubecost Budgets API)'
+    required: false
+    default: ''
+  fail_on_budget_exceeded:
+    description: 'Whether to fail the workflow when the predicted cost would exceed the budget'
+    required: false
+    default: 'true'
+
 outputs:
   PREDICTION_TABLE:
     description: 'The ASCII table-formatted prediction'
@@ -60,6 +74,21 @@ outputs:
   BASE_COST:
     description: 'Base branch cost (delta mode only)'
     value: ${{ steps.format-output.outputs.base_cost }}
+  BUDGET_STATUS:
+    description: 'Budget check result: WITHIN_BUDGET, EXCEEDS_BUDGET, or NOT_CHECKED'
+    value: ${{ steps.check-budget.outputs.budget_status }}
+  BUDGET_TOTAL:
+    description: 'Total budget spend limit in dollars'
+    value: ${{ steps.check-budget.outputs.budget_total }}
+  BUDGET_CURRENT_SPEND:
+    description: 'Current spend against the budget in dollars'
+    value: ${{ steps.check-budget.outputs.budget_current_spend }}
+  BUDGET_REMAINING:
+    description: 'Remaining budget in dollars (spend limit minus current spend)'
+    value: ${{ steps.check-budget.outputs.budget_remaining }}
+  BUDGET_UTILIZATION_PERCENTAGE:
+    description: 'Current budget utilization percentage before this deployment'
+    value: ${{ steps.check-budget.outputs.budget_utilization_percentage }}
 
 runs:
   using: "composite"
@@ -76,7 +105,7 @@ runs:
     # Step 2: Checkout base branch and run prediction (delta mode only)
     - name: Checkout base branch
       if: inputs.enable_delta_mode == 'true'
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         ref: ${{ inputs.base_ref }}
         path: _base-branch-temp
@@ -102,7 +131,6 @@ runs:
         echo "EOF" >> $GITHUB_OUTPUT
         
         # Extract total cost from current prediction
-        # This is a simplified parser - adjust based on actual table format
         CURRENT_COST=$(echo "$CURRENT_TABLE" | grep -i "total" | grep -oE '[0-9]+\.[0-9]+' | head -1 || echo "0.00")
         echo "total_cost=$CURRENT_COST" >> $GITHUB_OUTPUT
         
@@ -190,8 +218,84 @@ runs:
           echo "::notice::Cost thresholds check passed"
         fi
 
+    # Step 5: Check Kubecost budget
+    - name: Check Kubecost budget
+      id: check-budget
+      shell: bash
+      run: |
+        # Skip if budget check not enabled
+        if [ "${{ inputs.budget_check_enabled }}" != "true" ]; then
+          echo "budget_status=NOT_CHECKED" >> $GITHUB_OUTPUT
+          echo "::notice::Budget check not enabled, skipping"
+          exit 0
+        fi
+
+        # Require kubecost_api_path
+        if [ -z "${{ inputs.kubecost_api_path }}" ]; then
+          echo "budget_status=NOT_CHECKED" >> $GITHUB_OUTPUT
+          echo "::warning::Budget check enabled but kubecost_api_path is not configured — skipping"
+          exit 0
+        fi
+
+        # Require budget_id
+        if [ -z "${{ inputs.budget_id }}" ]; then
+          echo "::error::budget_check_enabled is true but budget_id is not set"
+          exit 1
+        fi
+
+        BUDGET_ID="${{ inputs.budget_id }}"
+        API_PATH="${{ inputs.kubecost_api_path }}"
+
+        # Query the Kubecost budget API
+        HTTP_STATUS=$(curl -s -o /tmp/budget_response.json -w "%{http_code}" \
+          "${API_PATH}/budget?id=${BUDGET_ID}")
+
+        if [ "$HTTP_STATUS" != "200" ]; then
+          echo "::error::Failed to retrieve budget '${BUDGET_ID}' from Kubecost API (HTTP $HTTP_STATUS)"
+          cat /tmp/budget_response.json
+          exit 1
+        fi
+
+        # Parse budget fields
+        BUDGET_TOTAL=$(jq -r '.data.spendLimit // 0' /tmp/budget_response.json)
+        CURRENT_SPEND=$(jq -r '.data.currentSpend // 0' /tmp/budget_response.json)
+        BUDGET_NAME=$(jq -r '.data.name // "unknown"' /tmp/budget_response.json)
+
+        if [ "$BUDGET_TOTAL" == "null" ] || [ "$BUDGET_TOTAL" == "0" ]; then
+          echo "::error::Budget '${BUDGET_ID}' returned an empty or zero spend limit — check the budget ID"
+          exit 1
+        fi
+
+        BUDGET_REMAINING=$(echo "$BUDGET_TOTAL - $CURRENT_SPEND" | bc)
+        UTILIZATION_PCT=$(echo "scale=2; ($CURRENT_SPEND / $BUDGET_TOTAL) * 100" | bc)
+
+        echo "budget_total=$BUDGET_TOTAL" >> $GITHUB_OUTPUT
+        echo "budget_current_spend=$CURRENT_SPEND" >> $GITHUB_OUTPUT
+        echo "budget_remaining=$BUDGET_REMAINING" >> $GITHUB_OUTPUT
+        echo "budget_utilization_percentage=$UTILIZATION_PCT" >> $GITHUB_OUTPUT
+
+        # Choose cost to compare: delta cost change if delta mode on, else full predicted cost
+        if [ "${{ inputs.enable_delta_mode }}" == "true" ]; then
+          PREDICTED_COST="${{ steps.format-output.outputs.cost_change }}"
+        else
+          PREDICTED_COST="${{ steps.format-output.outputs.total_cost }}"
+        fi
+
+        # Check whether predicted cost would exceed remaining budget
+        if (( $(echo "$PREDICTED_COST > $BUDGET_REMAINING" | bc -l) )); then
+          echo "budget_status=EXCEEDS_BUDGET" >> $GITHUB_OUTPUT
+          MSG="Predicted cost of \$$PREDICTED_COST would exceed remaining budget of \$$BUDGET_REMAINING for budget '${BUDGET_NAME}' (limit: \$$BUDGET_TOTAL, current spend: \$$CURRENT_SPEND)"
+          echo "::warning::$MSG"
+
+          if [ "${{ inputs.fail_on_budget_exceeded }}" == "true" ]; then
+            echo "::error::$MSG"
+            exit 1
+          fi
+        else
+          echo "budget_status=WITHIN_BUDGET" >> $GITHUB_OUTPUT
+          echo "::notice::Budget check passed — predicted cost of \$$PREDICTED_COST is within remaining budget of \$$BUDGET_REMAINING for '${BUDGET_NAME}'"
+        fi
+
 branding:
   color: green
   icon: dollar-sign
-
-# Made with Bob
