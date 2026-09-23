@@ -27,39 +27,21 @@ jobs:
           path: ./
           persist-credentials: false
 
+      # Runs the action as published, including its built-in comment: the job
+      # summary always, and the PR comment on same-repository pull requests.
       - name: Run predict on test files
         id: prediction
         uses: ./
         with:
           log_level: "debug"
           path: ./test
+          comment: "true"
 
-      - name: Output prediction
+      - name: Check the prediction output
         env:
           PREDICTION_TABLE: ${{ steps.prediction.outputs.PREDICTION_TABLE }}
         run: |
-          printf '```\n%s\n```\n' "$PREDICTION_TABLE" | tee -a "$GITHUB_STEP_SUMMARY"
           if ! grep -Eq 'TOTAL MONTHLY COST +[0-9]+\.[0-9]{2} [A-Z]{3}' <<<"$PREDICTION_TABLE"; then
             echo '::error::PREDICTION_TABLE is empty or has no TOTAL MONTHLY COST line'
             exit 1
-          fi
-
-      # Fork PRs get a read-only token; they see the table in the job summary instead.
-      - name: Create or update PR comment with prediction results
-        if: github.event.pull_request.head.repo.full_name == github.repository
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PREDICTION_TABLE: ${{ steps.prediction.outputs.PREDICTION_TABLE }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          marker='<!-- kubecost-prediction-results -->'
-          heading="## Kubecost's total cost prediction for K8s manifests in \`./test\`"
-          body="$(printf '%s\n\n%s\n\n```\n%s\n```\n' "$marker" "$heading" "$PREDICTION_TABLE")"
-          cid="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
-            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- kubecost-prediction-results -->"))) | .id' |
-            tail -n 1)"
-          if [ -n "$cid" ]; then
-            gh api --silent -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$cid" -f body="$body"
-          else
-            gh api --silent -X POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -f body="$body"
           fi
