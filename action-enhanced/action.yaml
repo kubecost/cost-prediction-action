@@ -146,7 +146,7 @@ runs:
           
           # Calculate percentage change
           if [ "$BASE_COST" != "0.00" ]; then
-            COST_CHANGE_PCT=$(echo "scale=2; ($COST_CHANGE / $BASE_COST) * 100" | bc)
+            COST_CHANGE_PCT=$(echo "scale=4; ($COST_CHANGE / $BASE_COST) * 100" | bc)
           else
             COST_CHANGE_PCT="0.00"
           fi
