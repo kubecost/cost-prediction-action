@@ -255,3 +255,47 @@ echo "============================================"
 if [ "$FAIL" -gt 0 ]; then
   exit 1
 fi
+
+# ── Suite 4: v3 proxy translations ───────────────────────────────────────────
+echo ""
+echo "=== Suite 4: Kubecost v3 Proxy Translations ==="
+echo "(Requires demo.kubecost.io to be reachable)"
+echo ""
+
+# Start the proxy
+PROXY_PORT=19098
+KUBECOST_UPSTREAM=https://demo.kubecost.io \
+PROXY_PORT=$PROXY_PORT \
+PROXY_HOST=127.0.0.1 \
+python3 "$(dirname "$0")/kubecost-v3-proxy.py" &
+PROXY_PID=$!
+sleep 1
+
+PROXY_BASE="http://127.0.0.1:${PROXY_PORT}"
+
+# Test 4a: /model/clusterInfo returns a valid id field
+CLUSTER_ID=$(curl -s "${PROXY_BASE}/model/clusterInfo" | jq -r '.data.id // empty')
+if [ -n "$CLUSTER_ID" ]; then
+  pass "clusterInfo translation: got cluster ID '$CLUSTER_ID'"
+else
+  fail "clusterInfo translation: .data.id was empty"
+fi
+
+# Test 4b: /model/getConfigs returns USD currency code
+CURRENCY=$(curl -s "${PROXY_BASE}/model/getConfigs" | jq -r '.data.currencyCode // empty')
+assert_eq "getConfigs stub: currencyCode" "$CURRENCY" "USD"
+
+# Test 4c: transparent passthrough — budgets API still works
+BUDGET_COUNT=$(curl -s "${PROXY_BASE}/model/budgets" | jq '.data | length')
+if [ "${BUDGET_COUNT:-0}" -gt 0 ]; then
+  pass "transparent passthrough: /model/budgets returned $BUDGET_COUNT budgets"
+else
+  fail "transparent passthrough: /model/budgets returned no data"
+fi
+
+# Test 4d: unknown endpoint still 404s (no false positives)
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${PROXY_BASE}/model/nonexistent-endpoint-xyz")
+assert_eq "unknown endpoint passes through as 404" "$STATUS" "404"
+
+kill $PROXY_PID 2>/dev/null
+wait $PROXY_PID 2>/dev/null
