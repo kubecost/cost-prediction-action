@@ -21,7 +21,7 @@ jobs:
         id: delta-test
         uses: ./action-enhanced
         with:
-          path: test/delta-test/base-workload.yaml
+          path: test/delta-test/increased-workload.yaml
           enable_delta_mode: "true"
           base_ref: "main"
           log_level: "info"
@@ -54,7 +54,7 @@ jobs:
         id: threshold-pass
         uses: ./action-enhanced
         with:
-          path: test/delta-test/base-workload.yaml
+          path: test/delta-test/increased-workload.yaml
           enable_delta_mode: "true"
           base_ref: "main"
           max_cost_increase: "10000.00"
@@ -82,7 +82,7 @@ jobs:
         id: threshold-fail
         uses: ./action-enhanced
         with:
-          path: test/delta-test/base-workload.yaml
+          path: test/delta-test/increased-workload.yaml
           enable_delta_mode: "true"
           base_ref: "main"
           max_cost_increase: "1.00"
@@ -111,7 +111,7 @@ jobs:
         id: threshold-fail
         uses: ./action-enhanced
         with:
-          path: test/delta-test/base-workload.yaml
+          path: test/delta-test/increased-workload.yaml
           enable_delta_mode: "true"
           base_ref: "main"
           max_cost_increase: "10000.00"
@@ -140,7 +140,7 @@ jobs:
         id: threshold-warn
         uses: ./action-enhanced
         with:
-          path: test/delta-test/base-workload.yaml
+          path: test/delta-test/increased-workload.yaml
           enable_delta_mode: "true"
           base_ref: "main"
           max_cost_increase: "1.00"
@@ -164,7 +164,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Replace base-workload with decreased version for this test
+      # Compare decreased-workload.yaml (current branch, small) against
+      # base-workload.yaml on main (also small baseline) — but we need
+      # current branch to be smaller than main's big version.
+      # Swap: overwrite base-workload on disk with the decreased version
+      # so current prediction uses decreased, while main still has baseline.
+      - name: Swap base-workload with decreased version for this test
         run: |
           cp test/delta-test/decreased-workload.yaml test/delta-test/base-workload.yaml
 
