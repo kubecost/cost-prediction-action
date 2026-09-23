@@ -93,14 +93,19 @@ outputs:
 runs:
   using: "composite"
   steps:
+    # Values reach every script only through env and are always quoted. The
+    # prediction tables hold names from the manifests under review, so they
+    # are treated as untrusted text and never pasted into a script.
+
     # Step 1: Run prediction on current branch
     - name: Run prediction on current branch
       id: current-prediction
-      uses: kubecost/cost-prediction-action@v0.1.1
-      with:
-        path: ${{ inputs.path }}
-        kubecost_api_path: ${{ inputs.kubecost_api_path }}
-        log_level: ${{ inputs.log_level }}
+      shell: bash
+      env:
+        PREDICTION_PATH: ${{ inputs.path }}
+        KUBECOST_API_PATH: ${{ inputs.kubecost_api_path }}
+        LOG_LEVEL: ${{ inputs.log_level }}
+      run: bash "$GITHUB_ACTION_PATH/predict.sh"
 
     # Step 2: Checkout base branch and run prediction (delta mode only)
     - name: Checkout base branch
@@ -109,49 +114,58 @@ runs:
       with:
         ref: ${{ inputs.base_ref }}
         path: _base-branch-temp
+        persist-credentials: false
 
     - name: Run prediction on base branch
       if: inputs.enable_delta_mode == 'true'
       id: base-prediction
-      uses: kubecost/cost-prediction-action@v0.1.1
-      with:
-        path: _base-branch-temp/${{ inputs.path }}
-        kubecost_api_path: ${{ inputs.kubecost_api_path }}
-        log_level: ${{ inputs.log_level }}
+      shell: bash
+      env:
+        PREDICTION_PATH: _base-branch-temp/${{ inputs.path }}
+        KUBECOST_API_PATH: ${{ inputs.kubecost_api_path }}
+        LOG_LEVEL: ${{ inputs.log_level }}
+      run: bash "$GITHUB_ACTION_PATH/predict.sh"
 
     # Step 3: Parse and compare predictions
     - name: Parse and compare predictions
       id: format-output
       shell: bash
+      env:
+        CURRENT_TABLE: ${{ steps.current-prediction.outputs.PREDICTION_TABLE }}
+        BASE_TABLE: ${{ steps.base-prediction.outputs.PREDICTION_TABLE }}
+        ENABLE_DELTA_MODE: ${{ inputs.enable_delta_mode }}
+        BASE_REF: ${{ inputs.base_ref }}
       run: |
-        # Parse current prediction
-        CURRENT_TABLE="${{ steps.current-prediction.outputs.PREDICTION_TABLE }}"
-        echo "prediction_table<<EOF" >> $GITHUB_OUTPUT
-        echo "$CURRENT_TABLE" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-        
+        # Parse current prediction. A random delimiter, so the table cannot
+        # end the multiline output early and set other outputs.
+        delim="EOF_$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+        {
+          echo "prediction_table<<$delim"
+          printf '%s\n' "$CURRENT_TABLE"
+          echo "$delim"
+        } >> "$GITHUB_OUTPUT"
+
         # Extract total cost from current prediction
-        CURRENT_COST=$(echo "$CURRENT_TABLE" | grep -i "total" | grep -oE '[0-9]+\.[0-9]+' | head -1 || echo "0.00")
-        echo "total_cost=$CURRENT_COST" >> $GITHUB_OUTPUT
-        
+        CURRENT_COST=$(printf '%s\n' "$CURRENT_TABLE" | grep -i "total" | grep -oE '[0-9]+\.[0-9]+' | head -1 || echo "0.00")
+        echo "total_cost=$CURRENT_COST" >> "$GITHUB_OUTPUT"
+
         # Delta mode calculations
-        if [ "${{ inputs.enable_delta_mode }}" == "true" ]; then
-          BASE_TABLE="${{ steps.base-prediction.outputs.PREDICTION_TABLE }}"
-          BASE_COST=$(echo "$BASE_TABLE" | grep -i "total" | grep -oE '[0-9]+\.[0-9]+' | head -1 || echo "0.00")
-          echo "base_cost=$BASE_COST" >> $GITHUB_OUTPUT
-          
+        if [ "$ENABLE_DELTA_MODE" == "true" ]; then
+          BASE_COST=$(printf '%s\n' "$BASE_TABLE" | grep -i "total" | grep -oE '[0-9]+\.[0-9]+' | head -1 || echo "0.00")
+          echo "base_cost=$BASE_COST" >> "$GITHUB_OUTPUT"
+
           # Calculate cost change
           COST_CHANGE=$(echo "$CURRENT_COST - $BASE_COST" | bc)
-          echo "cost_change=$COST_CHANGE" >> $GITHUB_OUTPUT
-          
+          echo "cost_change=$COST_CHANGE" >> "$GITHUB_OUTPUT"
+
           # Calculate percentage change
           if [ "$BASE_COST" != "0.00" ]; then
             COST_CHANGE_PCT=$(echo "scale=4; ($COST_CHANGE / $BASE_COST) * 100" | bc)
           else
             COST_CHANGE_PCT="0.00"
           fi
-          echo "cost_change_percentage=$COST_CHANGE_PCT" >> $GITHUB_OUTPUT
-          
+          echo "cost_change_percentage=$COST_CHANGE_PCT" >> "$GITHUB_OUTPUT"
+
           # Create JSON output
           cat > prediction.json <<EOF
         {
@@ -159,7 +173,7 @@ runs:
           "base_cost": $BASE_COST,
           "cost_change": $COST_CHANGE,
           "cost_change_percentage": $COST_CHANGE_PCT,
-          "base_ref": "${{ inputs.base_ref }}"
+          "base_ref": "$BASE_REF"
         }
         EOF
         else
@@ -170,47 +184,49 @@ runs:
         }
         EOF
         fi
-        
-        echo "prediction_json=$(cat prediction.json | jq -c .)" >> $GITHUB_OUTPUT
+
+        echo "prediction_json=$(jq -c . prediction.json)" >> "$GITHUB_OUTPUT"
 
     # Step 4: Check cost thresholds
     - name: Check cost thresholds
       id: check-thresholds
       shell: bash
+      env:
+        CURRENT_COST: ${{ steps.format-output.outputs.total_cost }}
+        COST_CHANGE: ${{ steps.format-output.outputs.cost_change }}
+        COST_CHANGE_PCT: ${{ steps.format-output.outputs.cost_change_percentage }}
+        MAX_INCREASE: ${{ inputs.max_cost_increase }}
+        MAX_PCT: ${{ inputs.max_cost_percentage }}
+        ENABLE_DELTA_MODE: ${{ inputs.enable_delta_mode }}
+        FAIL_ON_THRESHOLD: ${{ inputs.fail_on_threshold }}
       run: |
         THRESHOLD_EXCEEDED="false"
         THRESHOLD_MESSAGE=""
-        
-        CURRENT_COST="${{ steps.format-output.outputs.total_cost }}"
-        COST_CHANGE="${{ steps.format-output.outputs.cost_change }}"
-        COST_CHANGE_PCT="${{ steps.format-output.outputs.cost_change_percentage }}"
-        
+
         # Check absolute cost increase threshold
-        if [ -n "${{ inputs.max_cost_increase }}" ] && [ "${{ inputs.enable_delta_mode }}" == "true" ]; then
-          MAX_INCREASE="${{ inputs.max_cost_increase }}"
+        if [ -n "$MAX_INCREASE" ] && [ "$ENABLE_DELTA_MODE" == "true" ]; then
           if (( $(echo "$COST_CHANGE > $MAX_INCREASE" | bc -l) )); then
             THRESHOLD_EXCEEDED="true"
             THRESHOLD_MESSAGE="${THRESHOLD_MESSAGE}Cost increase of \$$COST_CHANGE exceeds maximum allowed increase of \$$MAX_INCREASE. "
           fi
         fi
-        
+
         # Check percentage cost increase threshold
-        if [ -n "${{ inputs.max_cost_percentage }}" ] && [ "${{ inputs.enable_delta_mode }}" == "true" ]; then
-          MAX_PCT="${{ inputs.max_cost_percentage }}"
+        if [ -n "$MAX_PCT" ] && [ "$ENABLE_DELTA_MODE" == "true" ]; then
           if (( $(echo "$COST_CHANGE_PCT > $MAX_PCT" | bc -l) )); then
             THRESHOLD_EXCEEDED="true"
             THRESHOLD_MESSAGE="${THRESHOLD_MESSAGE}Cost increase of ${COST_CHANGE_PCT}% exceeds maximum allowed percentage of ${MAX_PCT}%. "
           fi
         fi
-        
-        echo "threshold_exceeded=$THRESHOLD_EXCEEDED" >> $GITHUB_OUTPUT
-        echo "threshold_message=$THRESHOLD_MESSAGE" >> $GITHUB_OUTPUT
-        
+
+        echo "threshold_exceeded=$THRESHOLD_EXCEEDED" >> "$GITHUB_OUTPUT"
+        echo "threshold_message=$THRESHOLD_MESSAGE" >> "$GITHUB_OUTPUT"
+
         # Output threshold check results
         if [ "$THRESHOLD_EXCEEDED" == "true" ]; then
           echo "::warning::Cost threshold exceeded: $THRESHOLD_MESSAGE"
-          
-          if [ "${{ inputs.fail_on_threshold }}" == "true" ]; then
+
+          if [ "$FAIL_ON_THRESHOLD" == "true" ]; then
             echo "::error::$THRESHOLD_MESSAGE"
             exit 1
           fi
@@ -222,33 +238,38 @@ runs:
     - name: Check Kubecost budget
       id: check-budget
       shell: bash
+      env:
+        BUDGET_CHECK_ENABLED: ${{ inputs.budget_check_enabled }}
+        API_PATH: ${{ inputs.kubecost_api_path }}
+        BUDGET_ID: ${{ inputs.budget_id }}
+        ENABLE_DELTA_MODE: ${{ inputs.enable_delta_mode }}
+        COST_CHANGE: ${{ steps.format-output.outputs.cost_change }}
+        TOTAL_COST: ${{ steps.format-output.outputs.total_cost }}
+        FAIL_ON_BUDGET_EXCEEDED: ${{ inputs.fail_on_budget_exceeded }}
       run: |
         # Skip if budget check not enabled
-        if [ "${{ inputs.budget_check_enabled }}" != "true" ]; then
-          echo "budget_status=NOT_CHECKED" >> $GITHUB_OUTPUT
+        if [ "$BUDGET_CHECK_ENABLED" != "true" ]; then
+          echo "budget_status=NOT_CHECKED" >> "$GITHUB_OUTPUT"
           echo "::notice::Budget check not enabled, skipping"
           exit 0
         fi
 
         # Require kubecost_api_path
-        if [ -z "${{ inputs.kubecost_api_path }}" ]; then
-          echo "budget_status=NOT_CHECKED" >> $GITHUB_OUTPUT
+        if [ -z "$API_PATH" ]; then
+          echo "budget_status=NOT_CHECKED" >> "$GITHUB_OUTPUT"
           echo "::warning::Budget check enabled but kubecost_api_path is not configured — skipping"
           exit 0
         fi
 
         # Require budget_id
-        if [ -z "${{ inputs.budget_id }}" ]; then
+        if [ -z "$BUDGET_ID" ]; then
           echo "::error::budget_check_enabled is true but budget_id is not set"
           exit 1
         fi
 
-        BUDGET_ID="${{ inputs.budget_id }}"
-        API_PATH="${{ inputs.kubecost_api_path }}"
-
-        # Query the Kubecost budget API
-        HTTP_STATUS=$(curl -s -o /tmp/budget_response.json -w "%{http_code}" \
-          "${API_PATH}/budget?id=${BUDGET_ID}")
+        # Query the Kubecost budget API (served unchanged by Kubecost v2 and v3)
+        HTTP_STATUS=$(curl -s -G --data-urlencode "id=${BUDGET_ID}" \
+          -o /tmp/budget_response.json -w "%{http_code}" "${API_PATH%/}/budget")
 
         if [ "$HTTP_STATUS" != "200" ]; then
           echo "::error::Failed to retrieve budget '${BUDGET_ID}' from Kubecost API (HTTP $HTTP_STATUS)"
@@ -269,30 +290,30 @@ runs:
         BUDGET_REMAINING=$(echo "$BUDGET_TOTAL - $CURRENT_SPEND" | bc)
         UTILIZATION_PCT=$(echo "scale=2; ($CURRENT_SPEND / $BUDGET_TOTAL) * 100" | bc)
 
-        echo "budget_total=$BUDGET_TOTAL" >> $GITHUB_OUTPUT
-        echo "budget_current_spend=$CURRENT_SPEND" >> $GITHUB_OUTPUT
-        echo "budget_remaining=$BUDGET_REMAINING" >> $GITHUB_OUTPUT
-        echo "budget_utilization_percentage=$UTILIZATION_PCT" >> $GITHUB_OUTPUT
+        echo "budget_total=$BUDGET_TOTAL" >> "$GITHUB_OUTPUT"
+        echo "budget_current_spend=$CURRENT_SPEND" >> "$GITHUB_OUTPUT"
+        echo "budget_remaining=$BUDGET_REMAINING" >> "$GITHUB_OUTPUT"
+        echo "budget_utilization_percentage=$UTILIZATION_PCT" >> "$GITHUB_OUTPUT"
 
         # Choose cost to compare: delta cost change if delta mode on, else full predicted cost
-        if [ "${{ inputs.enable_delta_mode }}" == "true" ]; then
-          PREDICTED_COST="${{ steps.format-output.outputs.cost_change }}"
+        if [ "$ENABLE_DELTA_MODE" == "true" ]; then
+          PREDICTED_COST="$COST_CHANGE"
         else
-          PREDICTED_COST="${{ steps.format-output.outputs.total_cost }}"
+          PREDICTED_COST="$TOTAL_COST"
         fi
 
         # Check whether predicted cost would exceed remaining budget
         if (( $(echo "$PREDICTED_COST > $BUDGET_REMAINING" | bc -l) )); then
-          echo "budget_status=EXCEEDS_BUDGET" >> $GITHUB_OUTPUT
+          echo "budget_status=EXCEEDS_BUDGET" >> "$GITHUB_OUTPUT"
           MSG="Predicted cost of \$$PREDICTED_COST would exceed remaining budget of \$$BUDGET_REMAINING for budget '${BUDGET_NAME}' (limit: \$$BUDGET_TOTAL, current spend: \$$CURRENT_SPEND)"
           echo "::warning::$MSG"
 
-          if [ "${{ inputs.fail_on_budget_exceeded }}" == "true" ]; then
+          if [ "$FAIL_ON_BUDGET_EXCEEDED" == "true" ]; then
             echo "::error::$MSG"
             exit 1
           fi
         else
-          echo "budget_status=WITHIN_BUDGET" >> $GITHUB_OUTPUT
+          echo "budget_status=WITHIN_BUDGET" >> "$GITHUB_OUTPUT"
           echo "::notice::Budget check passed — predicted cost of \$$PREDICTED_COST is within remaining budget of \$$BUDGET_REMAINING for '${BUDGET_NAME}'"
         fi
 

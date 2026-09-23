@@ -267,7 +267,7 @@ PROXY_PORT=19098
 KUBECOST_UPSTREAM=https://demo.kubecost.io \
 PROXY_PORT=$PROXY_PORT \
 PROXY_HOST=127.0.0.1 \
-python3 "$(dirname "$0")/kubecost-v3-proxy.py" &
+python3 "$(dirname "$0")/../action-enhanced/kubecost-v3-proxy.py" &
 PROXY_PID=$!
 sleep 1
 
@@ -298,4 +298,4 @@ STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${PROXY_BASE}/model/nonexistent
 assert_eq "unknown endpoint passes through as 404" "$STATUS" "404"
 
 kill $PROXY_PID 2>/dev/null
-wait $PROXY_PID 2>/dev/null
+wait $PROXY_PID 2>/dev/null || true

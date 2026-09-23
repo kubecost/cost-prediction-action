@@ -6,14 +6,19 @@ Thin reverse proxy that makes the Kubecost cost-prediction-action image
 (built against Kubecost v2 / OpenCost endpoints) work with a Kubecost v3
 backend.
 
-Translation performed
+Translation performed (only when UPSTREAM answers 404, i.e. Kubecost v3;
+Kubecost v2 responses pass through unchanged)
 ---------------------
-  GET  /model/clusterInfo
-       → GET  {UPSTREAM}/model/clusterInfoMap
-         Takes the first cluster entry from .data and returns it as a flat
-         object matching the v2 shape: {"id": "...", "name": "...", ...}
+  GET  <prefix>/clusterInfo
+       → GET  {UPSTREAM}<prefix>/clusterInfoMap
+         Takes the first cluster entry from .data (the lowest cluster ID; the
+         server sorts its keys) and returns it in the v2 shape the image reads.
+  GET  <prefix>/getConfigs
+       → {"data": {"currencyCode": "USD"}} (v3 has no currency endpoint)
 
 All other requests are forwarded to UPSTREAM unchanged (transparent proxy).
+action-enhanced/predict.sh runs this in front of the image when
+kubecost_api_path is set.
 
 Usage
 -----
@@ -52,24 +57,23 @@ def fetch(method, url, body=None, headers=None):
             if k.lower() not in ("host", "connection", "transfer-encoding"):
                 req.add_header(k, v)
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, timeout=120) as resp:
             return resp.status, dict(resp.headers), resp.read()
     except urllib.error.HTTPError as e:
         return e.code, dict(e.headers), e.read()
 
 
-def translate_cluster_info(upstream_base):
+def translate_cluster_info(url):
     """
-    Call /model/clusterInfoMap on the upstream and return a v2-compatible
+    Call clusterInfoMap (url) on the upstream and return a v2-compatible
     /clusterInfo response body (bytes) and the HTTP status code.
 
     v3 clusterInfoMap response:
       {"code": 200, "data": {"<clusterID>": {"id": "...", "name": "...", ...}}}
 
     v2 clusterInfo response the image expects:
-      {"id": "...", "name": "...", ...}   (flat single-cluster object)
+      {"data": {"id": "...", "name": "...", ...}}
     """
-    url = f"{upstream_base}/model/clusterInfoMap"
     status, _, body = fetch("GET", url)
 
     if status != 200:
@@ -93,32 +97,33 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         print(f"[proxy] {self.address_string()} {fmt % args}", file=sys.stderr, flush=True)
 
+    def _reply(self, status, headers, body):
+        self.send_response(status)
+        for k, v in headers.items():
+            if k.lower() not in ("connection", "transfer-encoding", "content-length"):
+                self.send_header(k, v)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def _forward(self, method):
         path = self.path  # includes query string
+        route = path.split("?", 1)[0].rstrip("/")
 
-        # ── Translation: /model/clusterInfo → /model/clusterInfoMap ──────────
-        if path.rstrip("/") == "/model/clusterInfo" or path.startswith("/model/clusterInfo?"):
-            print(f"[proxy] TRANSLATE {method} {path} -> clusterInfoMap", file=sys.stderr, flush=True)
-            status, body = translate_cluster_info(UPSTREAM)
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("X-Proxy-Translated", "clusterInfo-to-clusterInfoMap")
-            self.end_headers()
-            self.wfile.write(body)
-            return
-
-        # ── Translation: /model/getConfigs (removed in v3) → stub ───────────
-        # The image uses this only for currency display; it handles 404 gracefully,
-        # but we return a stub so the table shows "USD" rather than empty.
-        if path.rstrip("/") == "/model/getConfigs" or path.startswith("/model/getConfigs?"):
-            print(f"[proxy] TRANSLATE {method} {path} -> getConfigs stub (USD)", file=sys.stderr, flush=True)
-            body = json.dumps({"data": {"currencyCode": "USD"}}).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+        # ── Kubecost v3 translations (only when the upstream answers 404) ──
+        if method == "GET" and route.endswith(("/clusterInfo", "/getConfigs")):
+            status, headers, body = fetch("GET", f"{UPSTREAM}{path}")
+            if status == 404 and route.endswith("/clusterInfo"):
+                map_url = f"{UPSTREAM}{route[:-len('/clusterInfo')]}/clusterInfoMap"
+                print(f"[proxy] TRANSLATE GET {route} -> clusterInfoMap", file=sys.stderr, flush=True)
+                status, body = translate_cluster_info(map_url)
+                headers = {"Content-Type": "application/json", "X-Proxy-Translated": "clusterInfo-to-clusterInfoMap"}
+            elif status == 404:
+                # The image uses getConfigs only for the currency label.
+                print(f"[proxy] TRANSLATE GET {route} -> getConfigs stub (USD)", file=sys.stderr, flush=True)
+                status, body = 200, json.dumps({"data": {"currencyCode": "USD"}}).encode()
+                headers = {"Content-Type": "application/json"}
+            self._reply(status, headers, body)
             return
 
         # ── Transparent proxy for everything else ─────────────────────────────
@@ -137,14 +142,7 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
         }
 
         status, resp_headers, resp_body = fetch(method, url, body=body, headers=fwd_headers)
-
-        self.send_response(status)
-        for k, v in resp_headers.items():
-            if k.lower() not in ("connection", "transfer-encoding"):
-                self.send_header(k, v)
-        self.send_header("Content-Length", str(len(resp_body)))
-        self.end_headers()
-        self.wfile.write(resp_body)
+        self._reply(status, resp_headers, resp_body)
 
     def do_GET(self):    self._forward("GET")
     def do_POST(self):   self._forward("POST")

@@ -29,18 +29,22 @@ jobs:
 
       - name: Predict cost of sample deployment
         id: prediction
-        uses: kubecost/cost-prediction-action@v0.1.1
+        # action-enhanced carries the Kubecost v3 compatibility the v0.1.1
+        # image lacks (demo.kubecost.io runs Kubecost v3).
+        uses: ./action-enhanced
         with:
           path: test/sample-deployment.yaml
           kubecost_api_path: "https://demo.kubecost.io/model"
           log_level: info
 
       - name: Show results
+        env:
+          PREDICTION_TABLE: ${{ steps.prediction.outputs.PREDICTION_TABLE }}
         run: |
           echo "=========================================="
           echo "  PREDICTION TABLE"
           echo "=========================================="
-          echo "${{ steps.prediction.outputs.PREDICTION_TABLE }}"
+          printf '%s\n' "$PREDICTION_TABLE"
 
   # ── Scenario: delta ──────────────────────────────────────────────────────────
   delta-mode:
