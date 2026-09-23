@@ -105,7 +105,7 @@ runs:
     # Step 2: Checkout base branch and run prediction (delta mode only)
     - name: Checkout base branch
       if: inputs.enable_delta_mode == 'true'
-      uses: actions/checkout@v4
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         ref: ${{ inputs.base_ref }}
         path: _base-branch-temp

@@ -102,6 +102,18 @@ TABLE_WHOLE="
 # Our regex requires [0-9]+\.[0-9]+ so whole numbers won't match — expected fallback
 assert_eq "whole dollar falls back (regex requires decimal)" "$(parse_cost "$TABLE_WHOLE")" "0.00"
 
+# Actual format confirmed by Cliff's PR#18 validation: "TOTAL MONTHLY COST 318.45 USD"
+TABLE_REAL="
+| WORKLOAD                | NAMESPACE | MONTHLY COST |
+|------------------------|-----------|-------------|
+| nginx-deployment       | default   | 215.00 USD   |
+| nginx-deployment-multi | default   | 95.00 USD    |
+| nginx-pod              | default   | 8.45 USD     |
+| TOTAL MONTHLY COST     |           | 318.45 USD   |
+"
+assert_eq "parse real PREDICTION_TABLE format (TOTAL MONTHLY COST row)" \
+  "$(parse_cost "$TABLE_REAL")" "318.45"
+
 # ── Suite 2: Threshold checks ─────────────────────────────────────────────────
 echo ""
 echo "=== Suite 2: Threshold Logic ==="

@@ -25,7 +25,7 @@ jobs:
     name: "Basic Cost Prediction"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Predict cost of sample deployment
         id: prediction
@@ -48,7 +48,7 @@ jobs:
     name: "Delta Mode: Cost Diff"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -79,7 +79,7 @@ jobs:
     name: "Threshold: Within Limits (should PASS)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -111,7 +111,7 @@ jobs:
     name: "Threshold: Exceeded (should FAIL)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -145,7 +145,7 @@ jobs:
     name: "Budget Check: Within Budget (should PASS)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Predict with budget check (Large Budget — 10k limit, ~$0 spend)
         id: cost
@@ -175,7 +175,7 @@ jobs:
     name: "Budget Check: Exceeds Budget (should FAIL)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Predict with budget check (Cluster-Production — already over limit)
         id: cost
