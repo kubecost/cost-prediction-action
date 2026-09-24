@@ -38,12 +38,16 @@ jobs:
             \`\`\`
             </details>`;
             
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: output
-            });
+            try {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output
+              });
+            } catch (e) {
+              core.warning(`Could not post PR comment: ${e.message}`);
+            }
 
   # Job 2: Delta mode with cost thresholds
   delta-prediction-with-thresholds:
@@ -107,12 +111,16 @@ jobs:
             \`\`\`
             </details>`;
             
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: output
-            });
+            try {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output
+              });
+            } catch (e) {
+              core.warning(`Could not post PR comment: ${e.message}`);
+            }
 
       - name: Fail if threshold exceeded
         if: steps.prediction.outputs.THRESHOLD_EXCEEDED == 'true'
