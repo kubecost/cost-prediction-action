@@ -2,14 +2,22 @@ name: TEST Predict with API
 
 on: [workflow_dispatch]
 
+permissions:
+  contents: read
+
 jobs:
   predict-cost-api:
+    # Runs only when the repository variable KUBECOST_API_PATH is set, e.g.
+    # https://kubecost.example.com/model. It is logged, so never embed credentials.
+    if: vars.KUBECOST_API_PATH != ''
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: ./
+          persist-credentials: false
 
       # Sometimes kubectl takes a second to forward.
       # Sleeping is bad but I'm not sure how else to do this,
@@ -28,9 +36,11 @@ jobs:
         uses: ./
         with:
           log_level: "debug"
-          kubecost_api_path: "http://nightly.kubecost.io:9090/model"
+          kubecost_api_path: ${{ vars.KUBECOST_API_PATH }}
           path: ./test
 
       - name: output raw yaml prediction
+        env:
+          PREDICTION_TABLE: ${{ steps.raw-prediction.outputs.PREDICTION_TABLE }}
         run: |
-          echo "${{ steps.raw-prediction.outputs.PREDICTION_TABLE }}"
+          printf '%s\n' "$PREDICTION_TABLE"

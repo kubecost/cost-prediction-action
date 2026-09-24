@@ -2,14 +2,19 @@ name: TEST Predict Action
 
 on: [workflow_dispatch]
 
+permissions:
+  contents: read
+
 jobs:
   predict-cost:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: ./
+          persist-credentials: false
 
       - name: local action with raw yaml
         id: raw-prediction
@@ -18,24 +23,8 @@ jobs:
           log_level: "warn"
           path: ./test
 
-      # - name: output raw yaml prediction
-      #   run: |
-      #     echo "${{ steps.raw-prediction.outputs.PREDICTION_TABLE }}"
-
-      # - name: download templated kubecost yaml
-      #   run: |
-      #     curl \
-      #         https://raw.githubusercontent.com/kubecost/cost-analyzer-helm-chart/develop/kubecost.yaml \
-      #         --silent \
-      #         --output ./kubecost.yaml
-
-      - name: local action with kubecost yaml
-        id: kubecost-raw-prediction
-        uses: ./
-        with:
-          log_level: "debug"
-          path: ./kubecost.yaml
-
-      - name: output kubecost yaml prediction
+      - name: output raw yaml prediction
+        env:
+          PREDICTION_TABLE: ${{ steps.raw-prediction.outputs.PREDICTION_TABLE }}
         run: |
-          echo "${{ steps.kubecost-raw-prediction.outputs.PREDICTION_TABLE }}"
+          printf '%s\n' "$PREDICTION_TABLE"
