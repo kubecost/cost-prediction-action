@@ -43,11 +43,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       
       # Test 2: Budget check with delta mode enabled
+      # Uses test/workload.yaml because it exists on upstream main (sample-deployment.yaml does not)
       - name: Test budget check with delta mode
         id: test-delta-budget
         uses: ./action-enhanced
         with:
-          path: 'test/sample-deployment.yaml'
+          path: 'test/workload.yaml'
           kubecost_api_path: ${{ secrets.KUBECOST_API_PATH }}
           enable_delta_mode: 'true'
           base_ref: 'main'
@@ -95,11 +96,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       
       # Test 4: Combined budget check with cost thresholds
+      # Uses test/workload.yaml because it exists on upstream main (sample-deployment.yaml does not)
       - name: Test combined checks
         id: test-combined
         uses: ./action-enhanced
         with:
-          path: 'test/sample-deployment.yaml'
+          path: 'test/workload.yaml'
           kubecost_api_path: ${{ secrets.KUBECOST_API_PATH }}
           enable_delta_mode: 'true'
           base_ref: 'main'
