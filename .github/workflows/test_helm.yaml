@@ -1,32 +1,30 @@
 name: TEST Predict the KC Helm chart
 on: [workflow_dispatch]
 
+permissions:
+  contents: read
+
 jobs:
   predict-cost-helm:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout latest Action version
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: ./action
-
-      # - name: Checkout Helm chart
-      #   uses: actions/checkout@v2
-      #   with:
-      #     repository: 'kubecost/cost-analyzer-helm-chart'
-      #     ref: 'develop'
-      #     path: ./helmchart
+          persist-credentials: false
 
       - name: Set up Helm
-        uses: azure/setup-helm@v1
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
-          version: v3.8.2
+          version: v4.2.3
 
       - name: Template chart
         run: |
-          helm repo add kubecost https://kubecost.github.io/cost-analyzer
-          helm template kubecost kubecost/cost-analyzer -n kubecost > ./templated.yaml
+          helm repo add kubecost https://kubecost.github.io/kubecost
+          helm template kubecost kubecost/kubecost --version 3.3.0 -n kubecost --skip-tests > ./templated.yaml
 
       - name: Predict cost of templated chart
         id: prediction
@@ -36,5 +34,7 @@ jobs:
             ./templated.yaml
 
       - name: Output prediction
+        env:
+          PREDICTION_TABLE: ${{ steps.prediction.outputs.PREDICTION_TABLE }}
         run: |
-          echo "${{ steps.prediction.outputs.PREDICTION_TABLE }}"
+          printf '%s\n' "$PREDICTION_TABLE"

@@ -2,21 +2,30 @@ name: TEST PR workflow
 on:
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
 jobs:
   predict-pr-noapi:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: ./
-
-      - name: Checkout kubecost/github-actions
-        uses: actions/checkout@v6
-        with:
-          repository: kubecost/github-actions
-          token: ${{ secrets.CPA_ACTIONS_PAT }}
-          path: ./github-actions
+          persist-credentials: false
 
       - name: Run predict on test files
         id: prediction
@@ -26,30 +35,31 @@ jobs:
           path: ./test
 
       - name: Output prediction
+        env:
+          PREDICTION_TABLE: ${{ steps.prediction.outputs.PREDICTION_TABLE }}
         run: |
-          echo "${{ steps.prediction.outputs.PREDICTION_TABLE }}"
+          printf '```\n%s\n```\n' "$PREDICTION_TABLE" | tee -a "$GITHUB_STEP_SUMMARY"
+          if ! grep -Eq 'TOTAL MONTHLY COST +[0-9]+\.[0-9]{2} [A-Z]{3}' <<<"$PREDICTION_TABLE"; then
+            echo '::error::PREDICTION_TABLE is empty or has no TOTAL MONTHLY COST line'
+            exit 1
+          fi
 
-      - name: Find existing PR comment
-        uses: ./github-actions/find-comment
-        id: find-comment
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          issue-number: ${{ github.event.pull_request.number }}
-          comment-author: 'github-actions[bot]'
-          body-includes: '<!-- kubecost-prediction-results -->'
-
+      # Fork PRs get a read-only token; they see the table in the job summary instead.
       - name: Create or update PR comment with prediction results
-        uses: ./github-actions/create-or-update-comment
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          issue-number: ${{ github.event.pull_request.number }}
-          comment-id: ${{ steps.find-comment.outputs.comment-id }}
-          edit-mode: replace
-          body: |
-            <!-- kubecost-prediction-results -->
-
-            ## Kubecost's total cost prediction for K8s manifests in `./test`
-
-            ```
-            ${{ steps.prediction.outputs.PREDICTION_TABLE }}
-            ```
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREDICTION_TABLE: ${{ steps.prediction.outputs.PREDICTION_TABLE }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          marker='<!-- kubecost-prediction-results -->'
+          heading="## Kubecost's total cost prediction for K8s manifests in \`./test\`"
+          body="$(printf '%s\n\n%s\n\n```\n%s\n```\n' "$marker" "$heading" "$PREDICTION_TABLE")"
+          cid="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- kubecost-prediction-results -->"))) | .id' |
+            tail -n 1)"
+          if [ -n "$cid" ]; then
+            gh api --silent -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$cid" -f body="$body"
+          else
+            gh api --silent -X POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -f body="$body"
+          fi
