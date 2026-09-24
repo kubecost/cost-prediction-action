@@ -1,0 +1,31 @@
+# Testing files
+test/test-with-demo.sh
+test/test-budget-simple.sh
+TESTING_WITH_DEMO.md
+TESTING_WITHOUT_BREW.md
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+
+# Node modules (if any)
+node_modules/
+
+# Environment files
+.env
+.env.local
+
+# Internal planning docs
+BUDGET_FEATURE_PLAN.md

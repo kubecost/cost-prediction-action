@@ -1,0 +1,207 @@
+name: "Demo: Cost Prediction with Kubecost"
+
+# Manual trigger with configurable inputs — run this live during the presentation.
+# Uses demo.kubecost.io as the Kubecost backend (no cluster setup required).
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: 'Demo scenario to run'
+        required: true
+        default: 'basic'
+        type: choice
+        options:
+          - basic           # Simple cost prediction, no delta
+          - delta           # Cost diff between base-workload and workload
+          - threshold-pass  # Delta + thresholds, cost within limits
+          - threshold-fail  # Delta + thresholds, cost exceeds limits
+          - budget-pass     # Budget check against a budget with headroom
+          - budget-fail     # Budget check against an already-over-limit budget
+
+jobs:
+  # ── Scenario: basic ─────────────────────────────────────────────────────────
+  basic-prediction:
+    if: github.event.inputs.scenario == 'basic'
+    name: "Basic Cost Prediction"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Predict cost of sample deployment
+        id: prediction
+        # action-enhanced carries the Kubecost v3 compatibility the v0.1.1
+        # image lacks (demo.kubecost.io runs Kubecost v3).
+        uses: ./action-enhanced
+        with:
+          path: test/sample-deployment.yaml
+          kubecost_api_path: "https://demo.kubecost.io/model"
+          log_level: info
+
+      - name: Show results
+        env:
+          PREDICTION_TABLE: ${{ steps.prediction.outputs.PREDICTION_TABLE }}
+        run: |
+          echo "=========================================="
+          echo "  PREDICTION TABLE"
+          echo "=========================================="
+          printf '%s\n' "$PREDICTION_TABLE"
+
+  # ── Scenario: delta ──────────────────────────────────────────────────────────
+  delta-mode:
+    if: github.event.inputs.scenario == 'delta'
+    name: "Delta Mode: Cost Diff"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Predict with delta mode
+        id: delta
+        uses: ./action-enhanced
+        with:
+          path: test/workload.yaml
+          kubecost_api_path: "https://demo.kubecost.io/model"
+          enable_delta_mode: "true"
+          base_ref: ${{ github.event.repository.default_branch }}
+
+      - name: Show delta results
+        run: |
+          echo "=========================================="
+          echo "  DELTA COST ANALYSIS"
+          echo "=========================================="
+          echo "  Current Cost : \$${{ steps.delta.outputs.TOTAL_MONTHLY_COST }}/mo"
+          echo "  Base Cost    : \$${{ steps.delta.outputs.BASE_COST }}/mo"
+          echo "  Cost Change  : \$${{ steps.delta.outputs.COST_CHANGE }}"
+          echo "  Change %     : ${{ steps.delta.outputs.COST_CHANGE_PERCENTAGE }}%"
+          echo ""
+          echo "  JSON: ${{ steps.delta.outputs.PREDICTION_JSON }}"
+
+  # ── Scenario: threshold-pass ─────────────────────────────────────────────────
+  threshold-pass:
+    if: github.event.inputs.scenario == 'threshold-pass'
+    name: "Threshold: Within Limits (should PASS)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Predict with generous thresholds
+        id: cost
+        uses: ./action-enhanced
+        with:
+          path: test/sample-deployment.yaml
+          kubecost_api_path: "https://demo.kubecost.io/model"
+          enable_delta_mode: "true"
+          base_ref: ${{ github.event.repository.default_branch }}
+          max_cost_increase: "10000.00"
+          max_cost_percentage: "500"
+          fail_on_threshold: "true"
+
+      - name: Confirm threshold passed
+        run: |
+          echo "Threshold Exceeded: ${{ steps.cost.outputs.THRESHOLD_EXCEEDED }}"
+          echo "Cost Change: \$${{ steps.cost.outputs.COST_CHANGE }}"
+          if [ "${{ steps.cost.outputs.THRESHOLD_EXCEEDED }}" = "true" ]; then
+            echo "❌ Unexpected threshold failure"
+            exit 1
+          fi
+          echo "✅ Thresholds passed as expected"
+
+  # ── Scenario: threshold-fail ─────────────────────────────────────────────────
+  threshold-fail:
+    if: github.event.inputs.scenario == 'threshold-fail'
+    name: "Threshold: Exceeded (should FAIL)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Predict with strict thresholds (expects failure)
+        id: cost
+        uses: ./action-enhanced
+        with:
+          path: test/workload.yaml
+          kubecost_api_path: "https://demo.kubecost.io/model"
+          enable_delta_mode: "true"
+          base_ref: ${{ github.event.repository.default_branch }}
+          max_cost_increase: "0.01"   # Any increase > $0.01 fails
+          max_cost_percentage: "0.01" # Any increase > 0.01% fails
+          fail_on_threshold: "true"
+        continue-on-error: true       # So the next step can display results
+
+      - name: Confirm threshold was triggered
+        run: |
+          echo "Threshold Exceeded: ${{ steps.cost.outputs.THRESHOLD_EXCEEDED }}"
+          echo "Cost Change: \$${{ steps.cost.outputs.COST_CHANGE }}"
+          echo "Change %: ${{ steps.cost.outputs.COST_CHANGE_PERCENTAGE }}%"
+          if [ "${{ steps.cost.outputs.THRESHOLD_EXCEEDED }}" = "true" ]; then
+            echo "✅ Threshold correctly blocked the deployment"
+          else
+            echo "⚠️  Threshold was not triggered (workload may match base exactly)"
+          fi
+
+  # ── Scenario: budget-pass ────────────────────────────────────────────────────
+  budget-pass:
+    if: github.event.inputs.scenario == 'budget-pass'
+    name: "Budget Check: Within Budget (should PASS)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Predict with budget check (Large Budget — 10k limit, ~$0 spend)
+        id: cost
+        uses: ./action-enhanced
+        with:
+          path: test/sample-deployment.yaml
+          kubecost_api_path: "https://demo.kubecost.io/model"
+          budget_check_enabled: "true"
+          budget_id: "fd97bdee-25cc-4fb7-b7f4-ecfb8c678041"  # Large Budget: $10,000 limit
+          fail_on_budget_exceeded: "true"
+
+      - name: Show budget results
+        run: |
+          echo "=========================================="
+          echo "  BUDGET CHECK RESULTS"
+          echo "=========================================="
+          echo "  Status             : ${{ steps.cost.outputs.BUDGET_STATUS }}"
+          echo "  Budget Limit       : \$${{ steps.cost.outputs.BUDGET_TOTAL }}"
+          echo "  Current Spend      : \$${{ steps.cost.outputs.BUDGET_CURRENT_SPEND }}"
+          echo "  Remaining          : \$${{ steps.cost.outputs.BUDGET_REMAINING }}"
+          echo "  Utilization        : ${{ steps.cost.outputs.BUDGET_UTILIZATION_PERCENTAGE }}%"
+          echo "  Predicted Cost     : \$${{ steps.cost.outputs.TOTAL_MONTHLY_COST }}"
+
+  # ── Scenario: budget-fail ────────────────────────────────────────────────────
+  budget-fail:
+    if: github.event.inputs.scenario == 'budget-fail'
+    name: "Budget Check: Exceeds Budget (should FAIL)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Predict with budget check (Cluster-Production — already over limit)
+        id: cost
+        uses: ./action-enhanced
+        with:
+          path: test/workload.yaml
+          kubecost_api_path: "https://demo.kubecost.io/model"
+          budget_check_enabled: "true"
+          budget_id: "9e55753e-5859-4cc0-a304-2b0ffe66a673"  # Cluster - Production: $500 limit, ~$895 spent
+          fail_on_budget_exceeded: "true"
+        continue-on-error: true  # So the next step can display results
+
+      - name: Show budget exceeded results
+        run: |
+          echo "=========================================="
+          echo "  BUDGET EXCEEDED — DEPLOYMENT BLOCKED"
+          echo "=========================================="
+          echo "  Status             : ${{ steps.cost.outputs.BUDGET_STATUS }}"
+          echo "  Budget Limit       : \$${{ steps.cost.outputs.BUDGET_TOTAL }}"
+          echo "  Current Spend      : \$${{ steps.cost.outputs.BUDGET_CURRENT_SPEND }}"
+          echo "  Remaining          : \$${{ steps.cost.outputs.BUDGET_REMAINING }}"
+          echo "  Predicted Cost     : \$${{ steps.cost.outputs.TOTAL_MONTHLY_COST }}"
+          if [ "${{ steps.cost.outputs.BUDGET_STATUS }}" = "EXCEEDS_BUDGET" ]; then
+            echo "✅ Budget check correctly blocked the deployment"
+          fi

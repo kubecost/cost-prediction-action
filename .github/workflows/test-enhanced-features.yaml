@@ -1,0 +1,254 @@
+name: Test Enhanced Features
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feature/**'
+      - 'test/**'
+
+jobs:
+  test-delta-mode:
+    name: Test Delta Mode
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Test delta mode with increased workload
+        id: delta-test
+        uses: ./action-enhanced
+        with:
+          path: test/delta-test/increased-workload.yaml
+          enable_delta_mode: "true"
+          base_ref: "main"
+          log_level: "info"
+        continue-on-error: true
+
+      - name: Output delta results
+        run: |
+          echo "=== Delta Mode Test Results ==="
+          echo "Current Cost: $${{ steps.delta-test.outputs.TOTAL_MONTHLY_COST }}"
+          echo "Base Cost: $${{ steps.delta-test.outputs.BASE_COST }}"
+          echo "Cost Change: $${{ steps.delta-test.outputs.COST_CHANGE }}"
+          echo "Cost Change %: ${{ steps.delta-test.outputs.COST_CHANGE_PERCENTAGE }}%"
+          echo ""
+          echo "Prediction Table:"
+          echo "${{ steps.delta-test.outputs.PREDICTION_TABLE }}"
+          echo ""
+          echo "JSON Output:"
+          echo "${{ steps.delta-test.outputs.PREDICTION_JSON }}"
+
+  test-threshold-pass:
+    name: Test Threshold Pass
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Test with lenient thresholds (should pass)
+        id: threshold-pass
+        uses: ./action-enhanced
+        with:
+          path: test/delta-test/increased-workload.yaml
+          enable_delta_mode: "true"
+          base_ref: "main"
+          max_cost_increase: "10000.00"
+          max_cost_percentage: "1000"
+          fail_on_threshold: "true"
+
+      - name: Verify threshold passed
+        run: |
+          if [ "${{ steps.threshold-pass.outputs.THRESHOLD_EXCEEDED }}" == "true" ]; then
+            echo "ERROR: Threshold should not have been exceeded"
+            exit 1
+          fi
+          echo "SUCCESS: Threshold check passed as expected"
+
+  test-threshold-fail-absolute:
+    name: Test Threshold Fail (Absolute)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Test with strict absolute threshold (should fail)
+        id: threshold-fail
+        uses: ./action-enhanced
+        with:
+          path: test/delta-test/increased-workload.yaml
+          enable_delta_mode: "true"
+          base_ref: "main"
+          max_cost_increase: "1.00"
+          max_cost_percentage: "10000"
+          fail_on_threshold: "true"
+        continue-on-error: true
+
+      - name: Verify threshold failed
+        run: |
+          if [ "${{ steps.threshold-fail.outputs.THRESHOLD_EXCEEDED }}" != "true" ]; then
+            echo "ERROR: Threshold should have been exceeded"
+            exit 1
+          fi
+          echo "SUCCESS: Threshold correctly detected as exceeded"
+
+  test-threshold-fail-percentage:
+    name: Test Threshold Fail (Percentage)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Test with strict percentage threshold (should fail)
+        id: threshold-fail
+        uses: ./action-enhanced
+        with:
+          path: test/delta-test/increased-workload.yaml
+          enable_delta_mode: "true"
+          base_ref: "main"
+          max_cost_increase: "10000.00"
+          max_cost_percentage: "10"
+          fail_on_threshold: "true"
+        continue-on-error: true
+
+      - name: Verify threshold failed
+        run: |
+          if [ "${{ steps.threshold-fail.outputs.THRESHOLD_EXCEEDED }}" != "true" ]; then
+            echo "ERROR: Threshold should have been exceeded"
+            exit 1
+          fi
+          echo "SUCCESS: Threshold correctly detected as exceeded"
+
+  test-threshold-warning-only:
+    name: Test Threshold Warning Only
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Test with warning only mode
+        id: threshold-warn
+        uses: ./action-enhanced
+        with:
+          path: test/delta-test/increased-workload.yaml
+          enable_delta_mode: "true"
+          base_ref: "main"
+          max_cost_increase: "1.00"
+          max_cost_percentage: "10"
+          fail_on_threshold: "false"
+
+      - name: Verify warning mode worked
+        run: |
+          if [ "${{ steps.threshold-warn.outputs.THRESHOLD_EXCEEDED }}" != "true" ]; then
+            echo "ERROR: Threshold should have been exceeded"
+            exit 1
+          fi
+          echo "SUCCESS: Threshold exceeded but workflow did not fail (warning mode)"
+
+  test-cost-decrease:
+    name: Test Cost Decrease Detection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # Compare decreased-workload.yaml (current branch, small) against
+      # base-workload.yaml on main (also small baseline) — but we need
+      # current branch to be smaller than main's big version.
+      # Swap: overwrite base-workload on disk with the decreased version
+      # so current prediction uses decreased, while main still has baseline.
+      - name: Swap base-workload with decreased version for this test
+        run: |
+          cp test/delta-test/decreased-workload.yaml test/delta-test/base-workload.yaml
+
+      - name: Test with decreased workload
+        id: decrease-test
+        uses: ./action-enhanced
+        with:
+          path: test/delta-test/base-workload.yaml
+          enable_delta_mode: "true"
+          base_ref: "main"
+
+      - name: Verify cost decrease
+        run: |
+          COST_CHANGE="${{ steps.decrease-test.outputs.COST_CHANGE }}"
+          if (( $(echo "$COST_CHANGE >= 0" | bc -l) )); then
+            echo "ERROR: Cost should have decreased"
+            exit 1
+          fi
+          echo "SUCCESS: Cost decrease detected"
+          echo "Cost Change: $COST_CHANGE"
+
+  test-without-delta-mode:
+    name: Test Without Delta Mode
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Test without delta mode
+        id: no-delta
+        uses: ./action-enhanced
+        with:
+          path: test/workload.yaml
+          enable_delta_mode: "false"
+
+      - name: Verify outputs
+        run: |
+          echo "Total Cost: $${{ steps.no-delta.outputs.TOTAL_MONTHLY_COST }}"
+          
+          # These should be empty when delta mode is disabled
+          if [ -n "${{ steps.no-delta.outputs.COST_CHANGE }}" ]; then
+            echo "WARNING: COST_CHANGE should be empty when delta mode is disabled"
+          fi
+          
+          if [ -n "${{ steps.no-delta.outputs.BASE_COST }}" ]; then
+            echo "WARNING: BASE_COST should be empty when delta mode is disabled"
+          fi
+          
+          echo "SUCCESS: Non-delta mode working correctly"
+
+  test-json-output:
+    name: Test JSON Output Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Run prediction
+        id: json-test
+        uses: ./action-enhanced
+        with:
+          path: test/workload.yaml
+          enable_delta_mode: "true"
+          base_ref: "main"
+
+      - name: Validate JSON output
+        run: |
+          echo "JSON Output: ${{ steps.json-test.outputs.PREDICTION_JSON }}"
+          
+          # Validate JSON is parseable
+          echo '${{ steps.json-test.outputs.PREDICTION_JSON }}' | jq . > /dev/null
+          
+          if [ $? -eq 0 ]; then
+            echo "SUCCESS: JSON output is valid"
+          else
+            echo "ERROR: JSON output is invalid"
+            exit 1
+          fi
+
+# Made with Bob

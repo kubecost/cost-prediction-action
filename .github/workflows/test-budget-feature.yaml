@@ -1,0 +1,123 @@
+name: Test Budget Feature
+
+on:
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  test-budget-check:
+    runs-on: ubuntu-latest
+    name: Test Kubecost Budget Validation
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      
+      # Test 1: Basic budget check (should pass if within budget)
+      - name: Test budget check - within budget
+        id: test-within-budget
+        uses: ./action-enhanced
+        with:
+          path: 'test/sample-deployment.yaml'
+          kubecost_api_path: ${{ secrets.KUBECOST_API_PATH }}
+          budget_check_enabled: 'true'
+          budget_id: 'test-team-budget'
+          fail_on_budget_exceeded: 'true'
+      
+      - name: Display budget check results
+        run: |
+          echo "Budget Status: ${{ steps.test-within-budget.outputs.BUDGET_STATUS }}"
+          echo "Budget Total: \$${{ steps.test-within-budget.outputs.BUDGET_TOTAL }}"
+          echo "Current Spend: \$${{ steps.test-within-budget.outputs.BUDGET_CURRENT_SPEND }}"
+          echo "Remaining Budget: \$${{ steps.test-within-budget.outputs.BUDGET_REMAINING }}"
+          echo "Utilization: ${{ steps.test-within-budget.outputs.BUDGET_UTILIZATION_PERCENTAGE }}%"
+          echo "Predicted Cost: \$${{ steps.test-within-budget.outputs.TOTAL_MONTHLY_COST }}"
+
+  test-budget-with-delta:
+    runs-on: ubuntu-latest
+    name: Test Budget Check with Delta Mode
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      
+      # Test 2: Budget check with delta mode enabled
+      # Uses test/workload.yaml because it exists on upstream main (sample-deployment.yaml does not)
+      - name: Test budget check with delta mode
+        id: test-delta-budget
+        uses: ./action-enhanced
+        with:
+          path: 'test/workload.yaml'
+          kubecost_api_path: ${{ secrets.KUBECOST_API_PATH }}
+          enable_delta_mode: 'true'
+          base_ref: 'main'
+          budget_check_enabled: 'true'
+          budget_id: 'test-team-budget'
+          fail_on_budget_exceeded: 'true'
+      
+      - name: Display delta budget check results
+        run: |
+          echo "Budget Status: ${{ steps.test-delta-budget.outputs.BUDGET_STATUS }}"
+          echo "Cost Change: \$${{ steps.test-delta-budget.outputs.COST_CHANGE }}"
+          echo "Cost Change %: ${{ steps.test-delta-budget.outputs.COST_CHANGE_PERCENTAGE }}%"
+          echo "Budget Remaining: \$${{ steps.test-delta-budget.outputs.BUDGET_REMAINING }}"
+
+  test-budget-warning-mode:
+    runs-on: ubuntu-latest
+    name: Test Budget Check in Warning Mode
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      
+      # Test 3: Budget check with warning mode (don't fail on exceed)
+      - name: Test budget check - warning mode
+        id: test-warning-mode
+        uses: ./action-enhanced
+        with:
+          path: 'test/sample-deployment.yaml'
+          kubecost_api_path: ${{ secrets.KUBECOST_API_PATH }}
+          budget_check_enabled: 'true'
+          budget_id: 'test-team-budget'
+          fail_on_budget_exceeded: 'false'
+      
+      - name: Display warning mode results
+        run: |
+          echo "Budget Status: ${{ steps.test-warning-mode.outputs.BUDGET_STATUS }}"
+          echo "This step runs even if budget is exceeded because fail_on_budget_exceeded is false"
+
+  test-combined-checks:
+    runs-on: ubuntu-latest
+    name: Test Combined Budget and Threshold Checks
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      
+      # Test 4: Combined budget check with cost thresholds
+      # Uses test/workload.yaml because it exists on upstream main (sample-deployment.yaml does not)
+      - name: Test combined checks
+        id: test-combined
+        uses: ./action-enhanced
+        with:
+          path: 'test/workload.yaml'
+          kubecost_api_path: ${{ secrets.KUBECOST_API_PATH }}
+          enable_delta_mode: 'true'
+          base_ref: 'main'
+          max_cost_increase: '100.00'
+          max_cost_percentage: '20'
+          budget_check_enabled: 'true'
+          budget_id: 'test-team-budget'
+          fail_on_threshold: 'true'
+          fail_on_budget_exceeded: 'true'
+      
+      - name: Display combined check results
+        run: |
+          echo "=== Cost Threshold Check ==="
+          echo "Threshold Exceeded: ${{ steps.test-combined.outputs.THRESHOLD_EXCEEDED }}"
+          echo "Cost Change: \$${{ steps.test-combined.outputs.COST_CHANGE }}"
+          echo ""
+          echo "=== Budget Check ==="
+          echo "Budget Status: ${{ steps.test-combined.outputs.BUDGET_STATUS }}"
+          echo "Budget Utilization: ${{ steps.test-combined.outputs.BUDGET_UTILIZATION_PERCENTAGE }}%"

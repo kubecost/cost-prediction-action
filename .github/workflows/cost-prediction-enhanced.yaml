@@ -1,0 +1,194 @@
+name: Cost Prediction with Delta and Thresholds
+
+on:
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  # Job 1: Basic prediction (no delta mode)
+  basic-prediction:
+    name: Basic Cost Prediction
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run basic prediction
+        id: prediction
+        uses: ./action-enhanced
+        with:
+          path: test
+          log_level: "info"
+
+      - name: Comment on PR with basic prediction
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const output = `## Kubecost Cost Prediction
+            
+            **Total Monthly Cost:** $\`${{ steps.prediction.outputs.TOTAL_MONTHLY_COST }}\`
+            
+            <details>
+            <summary>View detailed prediction</summary>
+            
+            \`\`\`
+            ${{ steps.prediction.outputs.PREDICTION_TABLE }}
+            \`\`\`
+            </details>`;
+            
+            try {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output
+              });
+            } catch (e) {
+              core.warning(`Could not post PR comment: ${e.message}`);
+            }
+
+  # Job 2: Delta mode with cost thresholds
+  delta-prediction-with-thresholds:
+    name: Delta Prediction with Thresholds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0  # Need full history for delta mode
+
+      - name: Run delta prediction with thresholds
+        id: prediction
+        uses: ./action-enhanced
+        with:
+          path: test/delta-test/base-workload.yaml
+          log_level: "info"
+          enable_delta_mode: "true"
+          base_ref: "main"
+          max_cost_increase: "50.00"
+          max_cost_percentage: "20"
+          fail_on_threshold: "true"
+        continue-on-error: true
+
+      - name: Comment on PR with delta prediction
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const costChange = parseFloat('${{ steps.prediction.outputs.COST_CHANGE }}');
+            const costChangePct = parseFloat('${{ steps.prediction.outputs.COST_CHANGE_PERCENTAGE }}');
+            const thresholdExceeded = '${{ steps.prediction.outputs.THRESHOLD_EXCEEDED }}' === 'true';
+            
+            const changeIndicator = costChange > 0 ? 'INCREASE' : costChange < 0 ? 'DECREASE' : 'NO CHANGE';
+            
+            let output = `## Kubecost Cost Prediction (Delta Mode)
+            
+            **Current Cost:** $\`${{ steps.prediction.outputs.TOTAL_MONTHLY_COST }}\`
+            **Base Cost (main):** $\`${{ steps.prediction.outputs.BASE_COST }}\`
+            **Cost Change:** \`${costChange >= 0 ? '+' : ''}$${costChange.toFixed(2)}\` (\`${costChangePct >= 0 ? '+' : ''}${costChangePct.toFixed(2)}%\`) - ${changeIndicator}
+            `;
+            
+            if (thresholdExceeded) {
+              output += `\n### WARNING: Cost Threshold Exceeded\n\n`;
+              output += `This PR exceeds the configured cost thresholds:\n`;
+              output += `- Max cost increase: $50.00\n`;
+              output += `- Max percentage increase: 20%\n`;
+            } else {
+              output += `\n### Cost Thresholds: PASSED\n`;
+            }
+            
+            output += `\n<details>
+            <summary>View detailed prediction</summary>
+            
+            \`\`\`
+            ${{ steps.prediction.outputs.PREDICTION_TABLE }}
+            \`\`\`
+            
+            **JSON Output:**
+            \`\`\`json
+            ${{ steps.prediction.outputs.PREDICTION_JSON }}
+            \`\`\`
+            </details>`;
+            
+            try {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output
+              });
+            } catch (e) {
+              core.warning(`Could not post PR comment: ${e.message}`);
+            }
+
+      - name: Fail if threshold exceeded
+        if: steps.prediction.outputs.THRESHOLD_EXCEEDED == 'true'
+        run: |
+          echo "::error::Cost thresholds exceeded. See PR comment for details."
+          exit 1
+
+  # Job 3: Delta mode without failing on threshold (warning only)
+  delta-prediction-warning-only:
+    name: Delta Prediction (Warning Only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Run delta prediction (warning only)
+        id: prediction
+        uses: ./action-enhanced
+        with:
+          path: test
+          log_level: "info"
+          enable_delta_mode: "true"
+          base_ref: "main"
+          max_cost_increase: "100.00"
+          max_cost_percentage: "50"
+          fail_on_threshold: "false"  # Only warn, don't fail
+
+      - name: Output prediction summary
+        run: |
+          echo "## Cost Prediction Summary"
+          echo "Current Cost: $${{ steps.prediction.outputs.TOTAL_MONTHLY_COST }}"
+          echo "Base Cost: $${{ steps.prediction.outputs.BASE_COST }}"
+          echo "Cost Change: $${{ steps.prediction.outputs.COST_CHANGE }}"
+          echo "Cost Change %: ${{ steps.prediction.outputs.COST_CHANGE_PERCENTAGE }}%"
+          echo "Threshold Exceeded: ${{ steps.prediction.outputs.THRESHOLD_EXCEEDED }}"
+
+  # Job 4: Test multiple scenarios
+  multi-scenario-test:
+    name: Test Multiple Scenarios
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        scenario:
+          - name: "Single Workload"
+            path: "./test/workload.yaml"
+          - name: "Multiple Workloads"
+            path: "./test/subdir"
+          - name: "With Unsupported Resources"
+            path: "./test/subdir/multi-with-unsupported.yaml"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Run prediction for ${{ matrix.scenario.name }}
+        id: prediction
+        uses: ./action-enhanced
+        with:
+          path: ${{ matrix.scenario.path }}
+          log_level: "info"
+          enable_delta_mode: "true"
+          base_ref: "main"
+
+      - name: Output results
+        run: |
+          echo "### ${{ matrix.scenario.name }}"
+          echo "Cost: $${{ steps.prediction.outputs.TOTAL_MONTHLY_COST }}"
+          echo "Change: $${{ steps.prediction.outputs.COST_CHANGE }}"
+
+# Made with Bob

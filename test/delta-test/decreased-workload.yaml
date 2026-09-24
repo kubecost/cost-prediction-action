@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-app
+  labels:
+    app: test-app
+spec:
+  replicas: 1  # Decreased from 2 to 1
+  selector:
+    matchLabels:
+      app: test-app
+  template:
+    metadata:
+      labels:
+        app: test-app
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.14.2
+        resources:
+          requests:
+            cpu: "250m"    # Decreased from 500m
+            memory: "256Mi"   # Decreased from 512Mi
+
+# Made with Bob
