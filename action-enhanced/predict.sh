@@ -10,7 +10,7 @@
 set -euo pipefail
 
 # The image of kubecost/cost-prediction-action v0.1.1, pinned by digest.
-IMAGE=gcr.io/kubecost1/cost-prediction-action@sha256:14dade8604cf9a1beaacb0cfe2b156237da1a2cf499bb94a68ab16ec7d155d9d
+IMAGE=icr.io/kubecost/cost-prediction-action@sha256:14dade8604cf9a1beaacb0cfe2b156237da1a2cf499bb94a68ab16ec7d155d9d
 PROXY_PORT=19090
 
 out=$(mktemp -d)
