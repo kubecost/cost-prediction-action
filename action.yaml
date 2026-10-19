@@ -18,7 +18,7 @@ inputs:
 
 runs:
   using: 'docker'
-  image: "docker://icr.io/kubecost/cost-prediction-action:0.1.0"
+  image: "docker://icr.io/kubecost/cost-prediction-action@sha256:e0d7d9ecd56ba5392a8cb147f56d2c4265b136b8f49798ceaa72afea066127a1"  # v0.2.0
   env:
     PREDICTION_PATH: ${{ inputs.path }}
     LOG_LEVEL: ${{ inputs.log_level }}

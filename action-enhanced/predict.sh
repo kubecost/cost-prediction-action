@@ -9,8 +9,8 @@
 # and passes everything else through. Without it, the image runs offline.
 set -euo pipefail
 
-# The image of kubecost/cost-prediction-action v0.1.1, pinned by digest.
-IMAGE=icr.io/kubecost/cost-prediction-action@sha256:14dade8604cf9a1beaacb0cfe2b156237da1a2cf499bb94a68ab16ec7d155d9d
+# The cost-prediction-action image v0.2.0, pinned by digest.
+IMAGE=icr.io/kubecost/cost-prediction-action@sha256:e0d7d9ecd56ba5392a8cb147f56d2c4265b136b8f49798ceaa72afea066127a1
 PROXY_PORT=19090
 
 out=$(mktemp -d)
