@@ -23,7 +23,7 @@ jobs:
       - name: Comment on PR with basic prediction
         if: github.event_name == 'pull_request'
         continue-on-error: true
-        uses: actions/github-script@v6
+        uses: actions/github-script@v9
         with:
           script: |
             const output = `## Kubecost Cost Prediction
@@ -73,7 +73,7 @@ jobs:
 
       - name: Comment on PR with delta prediction
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v6
+        uses: actions/github-script@v9
         with:
           script: |
             const costChange = parseFloat('${{ steps.prediction.outputs.COST_CHANGE }}');
